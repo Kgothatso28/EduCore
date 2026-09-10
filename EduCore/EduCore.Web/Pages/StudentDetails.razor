@@ -1,0 +1,53 @@
+@page "/students/{Id:guid}"
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>Please <a href="/login">login</a> to view student details.</p>
+}
+else if (loading)
+{
+    <p>Loading...</p>
+}
+else if (student == null)
+{
+    <p>Student not found.</p>
+}
+else
+{
+    <h2>@student.FirstName @student.LastName</h2>
+    <dl>
+        <dt>Student Number</dt>
+        <dd>@student.StudentNumber</dd>
+        <dt>Grade</dt>
+        <dd>@student.Grade</dd>
+        <dt>Class</dt>
+        <dd>@student.ClassName</dd>
+        <dt>Date of Birth</dt>
+        <dd>@student.DateOfBirth.ToShortDateString()</dd>
+    </dl>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Models.StudentModel? student;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        var client = Auth.CreateApiClient();
+        try
+        {
+            student = await client.GetFromJsonAsync<Models.StudentModel>($"/api/v1/students/{Id}");
+        }
+        catch
+        {
+            student = null;
+        }
+        loading = false;
+    }
+}

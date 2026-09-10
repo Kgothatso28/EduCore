@@ -1,0 +1,108 @@
+@page "/parents"
+@inject AuthService Auth
+
+<h2>Parents / Guardians</h2>
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>Please <a href="/login">login</a> to view parents.</p>
+}
+else
+{
+    <div class="toolbar">
+        <input placeholder="Search by name or number" @bind="query" />
+        <button class="btn" @onclick="Search">Search</button>
+        <button class="btn" @onclick="CreateDemo">Add Parent</button>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr><th>Parent No</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in parentsPage)
+            {
+                <tr>
+                    <td>@p.ParentNumber</td>
+                    <td>@p.FirstName @p.LastName</td>
+                    <td>@p.Email</td>
+                    <td>@p.Phone</td>
+                    <td><button class="btn" @onclick="() => View(p.Id)">View</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        <button class="btn" @onclick="PrevPage" disabled="@(_page==1)">Prev</button>
+        <span>Page @_page</span>
+        <button class="btn" @onclick="NextPage" disabled="@(parents.Count <= _page*_pageSize)">Next</button>
+    </div>
+}
+
+@code {
+    private List<Models.ParentModel> parents = new();
+    private IEnumerable<Models.ParentModel> parentsPage => parents.Skip((_page-1)*_pageSize).Take(_pageSize);
+    private int _page = 1;
+    private int _pageSize = 10;
+    private string query = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadParents();
+    }
+
+    private async Task LoadParents()
+    {
+        var client = Auth.CreateApiClient();
+        try
+        {
+            var result = await client.GetFromJsonAsync<List<Models.ParentModel>>("/api/v1/parents");
+            if (result != null)
+            {
+                var tenant = Auth.TenantId;
+                if (!string.IsNullOrEmpty(tenant)) result = result.Where(r => r.TenantId == tenant).ToList();
+                parents = result;
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private async Task Search()
+    {
+        _page = 1;
+        if (string.IsNullOrWhiteSpace(query)) await LoadParents();
+        else parents = parents.Where(p => p.FirstName.Contains(query, StringComparison.OrdinalIgnoreCase) || p.LastName.Contains(query, StringComparison.OrdinalIgnoreCase) || p.ParentNumber.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private void PrevPage() => _page = Math.Max(1, _page-1);
+    private void NextPage() => _page++;
+
+    private void View(Guid id)
+    {
+        NavigationManager.NavigateTo($"/parents/{id}");
+    }
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = default!;
+
+    private async Task CreateDemo()
+    {
+        var p = new Models.ParentModel
+        {
+            ParentNumber = "P" + (1000 + parents.Count + 1),
+            FirstName = "New",
+            LastName = "Parent",
+            Email = "newparent@example.com",
+            Phone = "+10000000000",
+            TenantId = Auth.TenantId ?? "educore-academy"
+        };
+        var client = Auth.CreateApiClient();
+        var resp = await client.PostAsJsonAsync("/api/v1/parents", p);
+        if (resp.IsSuccessStatusCode) await LoadParents();
+    }
+}

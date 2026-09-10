@@ -1,0 +1,105 @@
+@page "/classes"
+@inject AuthService Auth
+
+<h2>Classes</h2>
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>Please <a href="/login">login</a> to view classes.</p>
+}
+else
+{
+    <div class="toolbar">
+        <input placeholder="Search by name or code" @bind="query" />
+        <button class="btn" @onclick="Search">Search</button>
+        <button class="btn" @onclick="CreateDemo">Add Class</button>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr><th>Code</th><th>Name</th><th>Grade</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var c in classesPage)
+            {
+                <tr>
+                    <td>@c.ClassCode</td>
+                    <td>@c.Name</td>
+                    <td>@c.Grade</td>
+                    <td><button class="btn" @onclick="() => View(c.Id)">View</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        <button class="btn" @onclick="PrevPage" disabled="@(_page==1)">Prev</button>
+        <span>Page @_page</span>
+        <button class="btn" @onclick="NextPage" disabled="@(classes.Count <= _page*_pageSize)">Next</button>
+    </div>
+}
+
+@code {
+    private List<Models.ClassModel> classes = new();
+    private IEnumerable<Models.ClassModel> classesPage => classes.Skip((_page-1)*_pageSize).Take(_pageSize);
+    private int _page = 1;
+    private int _pageSize = 10;
+    private string query = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadClasses();
+    }
+
+    private async Task LoadClasses()
+    {
+        var client = Auth.CreateApiClient();
+        try
+        {
+            var result = await client.GetFromJsonAsync<List<Models.ClassModel>>("/api/v1/classes");
+            if (result != null)
+            {
+                var tenant = Auth.TenantId;
+                if (!string.IsNullOrEmpty(tenant)) result = result.Where(r => r.TenantId == tenant).ToList();
+                classes = result;
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private async Task Search()
+    {
+        _page = 1;
+        if (string.IsNullOrWhiteSpace(query)) await LoadClasses();
+        else classes = classes.Where(s => s.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || s.ClassCode.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private void PrevPage() => _page = Math.Max(1, _page-1);
+    private void NextPage() => _page++;
+
+    private void View(Guid id)
+    {
+        NavigationManager.NavigateTo($"/classes/{id}");
+    }
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = default!;
+
+    private async Task CreateDemo()
+    {
+        var c = new Models.ClassModel
+        {
+            ClassCode = "C" + (classes.Count + 1),
+            Name = "New Class",
+            Grade = "1",
+            TenantId = Auth.TenantId ?? "educore-academy"
+        };
+        var client = Auth.CreateApiClient();
+        var resp = await client.PostAsJsonAsync("/api/v1/classes", c);
+        if (resp.IsSuccessStatusCode) await LoadClasses();
+    }
+}

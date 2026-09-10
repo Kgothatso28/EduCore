@@ -1,0 +1,62 @@
+@page "/documents"
+@using EduCore.Web.Models
+@inject EduCore.Web.Services.AuthService Auth
+
+<h3>Documents</h3>
+
+@if (loading)
+{
+    <p>Loading documents...</p>
+}
+else if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (!docs.Any())
+{
+    <p>No documents available.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var d in docs)
+        {
+            <li class="list-group-item">
+                <strong>@d.Name</strong> <span class="text-muted">(@d.FileType)</span>
+                <div>@d.Description</div>
+                <small class="text-muted">@d.Date.ToShortDateString()</small>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<DocumentModel> docs = new();
+    private bool loading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var client = Auth.CreateApiClient();
+            var tenant = Auth.TenantId;
+            var res = await client.GetFromJsonAsync<List<DocumentModel>>($"api/v1/documents?tenant={tenant}");
+            if (res != null) docs = res;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

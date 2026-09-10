@@ -1,0 +1,80 @@
+@page "/results"
+@using EduCore.Web.Models
+@inject NavigationManager Navigation
+@inject EduCore.Web.Services.AuthService Auth
+
+<h3>Results</h3>
+
+@if (loading)
+{
+    <p>Loading results...</p>
+}
+else if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (!results.Any())
+{
+    <p>No results available.</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Subject</th>
+                <th>Total</th>
+                <th>Max</th>
+                <th>%</th>
+                <th>Grade</th>
+                <th>Period</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in results)
+            {
+                <tr>
+                    <td>@r.StudentName</td>
+                    <td>@r.SubjectName</td>
+                    <td>@r.TotalMarks</td>
+                    <td>@r.MaxMarks</td>
+                    <td>@r.Percentage.ToString("F1")</td>
+                    <td>@r.Grade</td>
+                    <td>@r.AcademicPeriod</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ResultModel> results = new();
+    private bool loading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadResults();
+    }
+
+    private async Task LoadResults()
+    {
+        loading = true;
+        try
+        {
+            var client = Auth.CreateApiClient();
+            var tenant = Auth.TenantId;
+            var res = await client.GetFromJsonAsync<List<ResultModel>>($"api/v1/results?tenant={tenant}");
+            if (res != null) results = res;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

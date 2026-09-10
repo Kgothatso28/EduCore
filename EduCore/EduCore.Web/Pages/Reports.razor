@@ -1,0 +1,73 @@
+@page "/reports"
+@inject EduCore.Web.Services.AuthService Auth
+
+<h3>Reports</h3>
+
+@if (loading)
+{
+    <p>Loading reports...</p>
+}
+else if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card p-3">
+                <h5>Attendance Summary</h5>
+                <pre>@attendanceSummaryJson</pre>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <h5>Finance Summary</h5>
+                <pre>@financeSummaryJson</pre>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <h5>Results Summary</h5>
+                <pre>@resultsSummaryJson</pre>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private string? errorMessage;
+    private string attendanceSummaryJson = "";
+    private string financeSummaryJson = "";
+    private string resultsSummaryJson = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var client = Auth.CreateApiClient();
+            var tenant = Auth.TenantId;
+            var att = await client.GetStringAsync($"api/v1/reports/attendance/summary?tenant={tenant}");
+            var fin = await client.GetStringAsync($"api/v1/reports/finance/summary?tenant={tenant}");
+            var res = await client.GetStringAsync($"api/v1/reports/results/summary?tenant={tenant}");
+            attendanceSummaryJson = att;
+            financeSummaryJson = fin;
+            resultsSummaryJson = res;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

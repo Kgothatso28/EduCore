@@ -1,0 +1,62 @@
+@page "/communications"
+@using EduCore.Web.Models
+@inject EduCore.Web.Services.AuthService Auth
+
+<h3>Announcements</h3>
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (!announcements.Any())
+{
+    <p>No announcements.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var a in announcements)
+        {
+            <li class="list-group-item">
+                <strong>@a.Title</strong> <small class="text-muted">(@a.Priority)</small>
+                <div>@a.Body</div>
+                <small class="text-muted">@a.Date.ToShortDateString()</small>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<AnnouncementModel> announcements = new();
+    private bool loading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var client = Auth.CreateApiClient();
+            var tenant = Auth.TenantId;
+            var res = await client.GetFromJsonAsync<List<AnnouncementModel>>($"api/v1/communications/announcements?tenant={tenant}");
+            if (res != null) announcements = res;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

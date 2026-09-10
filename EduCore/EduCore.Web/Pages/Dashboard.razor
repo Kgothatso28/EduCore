@@ -1,0 +1,76 @@
+@page "/dashboard"
+@inject AuthService Auth
+
+<h2>Dashboard</h2>
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>Please <a href="/login">login</a> to view the dashboard.</p>
+}
+else
+{
+    <div class="cards">
+        <div class="card">
+            <div class="card-title">Total Students</div>
+            <div class="card-value">@totalStudents</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Teachers</div>
+            <div class="card-value">@teachersCount</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Classes</div>
+            <div class="card-value">@classesCount</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Attendance Rate</div>
+            <div class="card-value">@attendanceRate%</div>
+        </div>
+    </div>
+
+    <h3>Recent Students</h3>
+    <table class="table">
+        <thead>
+            <tr><th>Student No</th><th>Name</th><th>Class</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var s in recentStudents)
+            {
+                <tr>
+                    <td>@s.StudentNumber</td>
+                    <td>@s.FirstName @s.LastName</td>
+                    <td>@s.ClassName</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private int totalStudents = 0;
+    private int teachersCount = 12;
+    private int classesCount = 8;
+    private int attendanceRate = 94;
+    private List<Models.StudentModel> recentStudents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        var client = Auth.CreateApiClient();
+        try
+        {
+            var students = await client.GetFromJsonAsync<List<Models.StudentModel>>("/api/v1/students");
+            if (students != null)
+            {
+                var tenant = Auth.TenantId;
+                if (!string.IsNullOrEmpty(tenant)) students = students.Where(s => s.TenantId == tenant).ToList();
+                totalStudents = students.Count;
+                recentStudents = students.Take(5).ToList();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+}

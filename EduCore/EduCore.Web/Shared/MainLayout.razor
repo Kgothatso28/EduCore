@@ -1,0 +1,61 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@using EduCore.Web.Services
+@inject AuthService Auth
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand">EduCore Demo</div>
+        <nav>
+            <ul>
+                <li><a href="/dashboard">Dashboard</a></li>
+                <li><a href="/students">Students</a></li>
+                <li><a href="/staff">Staff</a></li>
+                <li><a href="/academics">Academics</a></li>
+                <li><a href="/attendance">Attendance</a></li>
+                <li><a href="/finance">Finance</a></li>
+                <li><a href="/communications">Communications</a></li>
+                <li><a href="/administration">Administration</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <div class="main">
+        <header>
+            <div class="top-left">
+                <button class="btn" @onclick="ToggleNav">☰</button>
+                <h1>EduCore Demo</h1>
+            </div>
+            <div class="top-right">
+                <span class="tenant">@Auth.TenantId</span>
+                @if (Auth.IsAuthenticated)
+                {
+                    <span class="role">@Auth.Role</span>
+                    <button class="btn" @onclick="Logout">Logout</button>
+                }
+                else
+                {
+                    <a href="/login">Login</a>
+                }
+            </div>
+        </header>
+
+        <main>
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private bool collapsed = false;
+
+    void ToggleNav()
+    {
+        collapsed = !collapsed;
+    }
+
+    void Logout()
+    {
+        Auth.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

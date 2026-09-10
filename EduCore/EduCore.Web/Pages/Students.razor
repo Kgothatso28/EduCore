@@ -1,0 +1,110 @@
+@page "/students"
+@inject AuthService Auth
+
+<h2>Students</h2>
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>Please <a href="/login">login</a> to view students.</p>
+}
+else
+{
+    <div class="toolbar">
+        <input placeholder="Search by name or number" @bind="query" />
+        <button class="btn" @onclick="Search">Search</button>
+        <button class="btn" @onclick="CreateDemo">Add Student</button>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr><th>Student No</th><th>Name</th><th>Grade</th><th>Class</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var s in studentsPage)
+            {
+                <tr>
+                    <td>@s.StudentNumber</td>
+                    <td>@s.FirstName @s.LastName</td>
+                    <td>@s.Grade</td>
+                    <td>@s.ClassName</td>
+                    <td><button class="btn" @onclick="() => View(s.Id)">View</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        <button class="btn" @onclick="PrevPage" disabled="@(_page==1)">Prev</button>
+        <span>Page @_page</span>
+        <button class="btn" @onclick="NextPage" disabled="@(students.Count <= _page*_pageSize)">Next</button>
+    </div>
+}
+
+@code {
+    private List<Models.StudentModel> students = new();
+    private IEnumerable<Models.StudentModel> studentsPage => students.Skip((_page-1)*_pageSize).Take(_pageSize);
+    private int _page = 1;
+    private int _pageSize = 10;
+    private string query = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadStudents();
+    }
+
+    private async Task LoadStudents()
+    {
+        var client = Auth.CreateApiClient();
+        try
+        {
+            var result = await client.GetFromJsonAsync<List<Models.StudentModel>>("/api/v1/students");
+            if (result != null)
+            {
+                var tenant = Auth.TenantId;
+                if (!string.IsNullOrEmpty(tenant)) result = result.Where(r => r.TenantId == tenant).ToList();
+                students = result;
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private async Task Search()
+    {
+        _page = 1;
+        if (string.IsNullOrWhiteSpace(query)) await LoadStudents();
+        else students = students.Where(s => s.FirstName.Contains(query, StringComparison.OrdinalIgnoreCase) || s.LastName.Contains(query, StringComparison.OrdinalIgnoreCase) || s.StudentNumber.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private void PrevPage() => _page = Math.Max(1, _page-1);
+    private void NextPage() => _page++;
+
+    private void View(Guid id)
+    {
+        NavigationManager.NavigateTo($"/students/{id}");
+    }
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = default!;
+
+    private async Task CreateDemo()
+    {
+        var s = new Models.StudentModel
+        {
+            StudentNumber = "S" + (1000 + students.Count + 1),
+            FirstName = "New",
+            LastName = "Student",
+            DateOfBirth = DateTime.UtcNow.AddYears(-10),
+            Grade = "1",
+            ClassName = "Grade 1A",
+            Gender = "Female",
+            TenantId = Auth.TenantId ?? "educore-academy"
+        };
+        var client = Auth.CreateApiClient();
+        var resp = await client.PostAsJsonAsync("/api/v1/students", s);
+        if (resp.IsSuccessStatusCode) await LoadStudents();
+    }
+}

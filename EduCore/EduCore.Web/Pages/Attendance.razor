@@ -1,0 +1,173 @@
+@page "/attendance"
+@inject AuthService Auth
+@using EduCore.Web.Models
+@using Microsoft.AspNetCore.Components.Forms
+
+<h2>Attendance</h2>
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>Please <a href="/login">login</a> to manage or view attendance.</p>
+}
+else
+{
+    <div class="controls">
+        <label>Date:</label>
+        <InputDate @bind-Value="selectedDate" />
+        <label>Class:</label>
+        <select @bind="selectedClassId">
+            <option value="">-- Select class --</option>
+            @foreach (var c in classes) { <option value="@c.Id">@c.Name</option> }
+        </select>
+        <button class="btn" @onclick="LoadClassAttendance">Load</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <p>Loading...</p>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <p class="error">@errorMessage</p>
+    }
+    else
+    {
+        @if (students.Count == 0)
+        {
+            <p>No students found for the selected class and date.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr><th>Student</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in students)
+                    {
+                        <tr>
+                            <td>@s.Name</td>
+                            <td>
+                                <select @bind="attendanceMap[s.Id]">
+                                    @foreach (var st in Enum.GetValues(typeof(Models.AttendanceStatus)).Cast<Models.AttendanceStatus>())
+                                    {
+                                        <option value="@st">@st</option>
+                                    }
+                                </select>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="toolbar">
+                <button class="btn" @onclick="SaveAttendance">Save Attendance</button>
+                <span>Present: @presentCount</span>
+                <span>Absent: @absentCount</span>
+                <span>Late: @lateCount</span>
+                <span>Excused: @excusedCount</span>
+            </div>
+        }
+    }
+}
+
+@code {
+    private List<Models.ClassModel> classes = new();
+    private List<(Guid Id, string Name)> students = new();
+    private Dictionary<Guid, Models.AttendanceStatus> attendanceMap = new();
+    private Guid? selectedClassId;
+    private DateTime selectedDate = DateTime.UtcNow.Date;
+    private string selectedDateString
+    {
+        get => selectedDate.ToString("yyyy-MM-dd");
+        set { if (DateTime.TryParse(value, out var d)) selectedDate = d; }
+    }
+
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+
+    private int presentCount => attendanceMap.Values.Count(v => v == Models.AttendanceStatus.Present);
+    private int absentCount => attendanceMap.Values.Count(v => v == Models.AttendanceStatus.Absent);
+    private int lateCount => attendanceMap.Values.Count(v => v == Models.AttendanceStatus.Late);
+    private int excusedCount => attendanceMap.Values.Count(v => v == Models.AttendanceStatus.Excused);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadClasses();
+    }
+
+    private async Task LoadClasses()
+    {
+        try
+        {
+            var client = Auth.CreateApiClient();
+            var result = await client.GetFromJsonAsync<List<Models.ClassModel>>("/api/v1/classes");
+            classes = result ?? new List<Models.ClassModel>();
+        }
+        catch
+        {
+            classes = new List<Models.ClassModel>();
+        }
+    }
+
+    private async Task LoadClassAttendance()
+    {
+        if (selectedClassId == null) { errorMessage = "Please select a class."; return; }
+        isLoading = true; errorMessage = string.Empty;
+        try
+        {
+            // For demo, create a student list using DemoStudentRepository indirectly via API Students endpoint
+            var client = Auth.CreateApiClient();
+            var studs = await client.GetFromJsonAsync<List<Models.StudentModel>>("/api/v1/students?className=" + Uri.EscapeDataString(classes.First(c => c.Id == selectedClassId).Name));
+            students = studs?.Select(s => (s.Id, s.FirstName + " " + s.LastName)).ToList() ?? new List<(Guid, string)>();
+
+            // Load existing attendance for the date
+            var att = await client.GetFromJsonAsync<List<Models.AttendanceModel>>("/api/v1/attendances/byclass/" + selectedClassId + "?date=" + selectedDate.ToString("yyyy-MM-dd"));
+            attendanceMap.Clear();
+            foreach (var s in students) attendanceMap[s.Id] = Models.AttendanceStatus.Present;
+            if (att != null)
+            {
+                foreach (var a in att)
+                {
+                    if (attendanceMap.ContainsKey(a.StudentId)) attendanceMap[a.StudentId] = (Models.AttendanceStatus) a.Status;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load attendance: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAttendance()
+    {
+        if (selectedClassId == null) { errorMessage = "Please select a class."; return; }
+        var client = Auth.CreateApiClient();
+        try
+        {
+            foreach (var kv in attendanceMap)
+            {
+                var dto = new Models.AttendanceModel
+                {
+                    StudentId = kv.Key,
+                    StudentName = students.First(s => s.Id == kv.Key).Name,
+                    ClassId = selectedClassId,
+                    ClassName = classes.First(c => c.Id == selectedClassId).Name,
+                    Date = selectedDate,
+                    Status = kv.Value,
+                    TenantId = Auth.TenantId ?? string.Empty
+                };
+                await client.PostAsJsonAsync("/api/v1/attendances", dto);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to save attendance: " + ex.Message;
+        }
+    }
+}

@@ -1,0 +1,40 @@
+@page "/login"
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<div class="login-page">
+    <h2>EduCore Demo Login</h2>
+    <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+        <InputText @bind-Value="loginModel.Email" placeholder="Email" />
+        <InputText @bind-Value="loginModel.Password" placeholder="Password" type="password" />
+        <button class="btn" type="submit">Login</button>
+    </EditForm>
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="error">@message</div>
+    }
+</div>
+
+@code {
+    private LoginModel loginModel = new();
+    private string? message;
+
+    private async Task HandleLogin()
+    {
+        var ok = await Auth.LoginAsync(loginModel.Email, loginModel.Password);
+        if (ok)
+        {
+            Nav.NavigateTo("/dashboard");
+        }
+        else
+        {
+            message = "Invalid credentials";
+        }
+    }
+
+    public class LoginModel
+    {
+        public string Email { get; set; } = "admin@educore.demo";
+        public string Password { get; set; } = "Demo123!";
+    }
+}

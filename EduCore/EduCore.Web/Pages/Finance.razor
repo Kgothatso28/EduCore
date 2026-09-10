@@ -1,0 +1,100 @@
+@page "/finance"
+@using EduCore.Web.Models
+@inject EduCore.Web.Services.AuthService Auth
+
+<h3>Finance</h3>
+
+@if (loading)
+{
+    <p>Loading finance data...</p>
+}
+else if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-8">
+            <h5>Invoices</h5>
+            @if (!invoices.Any())
+            {
+                <p>No invoices.</p>
+            }
+            else
+            {
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Paid</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inv in invoices)
+                        {
+                            <tr>
+                                <td>@inv.StudentName</td>
+                                <td>@inv.Category</td>
+                                <td>@inv.Amount.ToString("C")</td>
+                                <td>@inv.Paid.ToString("C")</td>
+                                <td>@inv.Status</td>
+                                <td>@inv.Date.ToShortDateString()</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="col-md-4">
+            <h5>Summary</h5>
+            <p>Total invoiced: @totalInvoiced.ToString("C")</p>
+            <p>Total paid: @totalPaid.ToString("C")</p>
+            <p>Outstanding: @outstanding.ToString("C")</p>
+        </div>
+    </div>
+}
+
+@code {
+    private List<InvoiceModel> invoices = new();
+    private bool loading = true;
+    private string? errorMessage;
+    private decimal totalInvoiced = 0;
+    private decimal totalPaid = 0;
+    private decimal outstanding = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFinance();
+    }
+
+    private async Task LoadFinance()
+    {
+        loading = true;
+        try
+        {
+            var client = Auth.CreateApiClient();
+            var tenant = Auth.TenantId;
+            var res = await client.GetFromJsonAsync<List<InvoiceModel>>($"api/v1/finance/invoices?tenant={tenant}");
+            if (res != null)
+            {
+                invoices = res;
+                totalInvoiced = invoices.Sum(i => i.Amount);
+                totalPaid = invoices.Sum(i => i.Paid);
+                outstanding = totalInvoiced - totalPaid;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
