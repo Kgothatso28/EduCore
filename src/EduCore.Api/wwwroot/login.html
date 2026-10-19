@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - EduCore</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <a class="brand" href="/">EduCore</a>
+    <h1>Sign in</h1>
+    <p class="muted">Use your school account to continue.</p>
+    <!-- app.js posts these named fields to the Development-only demo login endpoint. -->
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input id="username" name="userName" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+  <!-- Shared client logic handles CSRF, sign-in submission, and accessible errors. -->
+  <script src="/app.js" defer></script>
+</body>
+</html>

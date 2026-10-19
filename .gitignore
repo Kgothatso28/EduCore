@@ -1,47 +1,12 @@
-# Build results
-bin/
-obj/
-[Dd]ebug/
-[Rr]elease/
-[Xx]64/
-[Xx]86/
-.NET/
-
-# Visual Studio
+**/bin/
+**/obj/
 .vs/
-*.sln.user
-*.suo
 *.user
-*.userosscache
-.vscode/
-*.code-workspace
-
-# IDEs
-.idea/
-*.swp
-*.swo
-*~
-
-# NuGet
-*.nupkg
-*.snupkg
-.nuget/
-project.lock.json
-project.assets.json
-
-# Environment
+*.suo
 .env
-.env.local
-appsettings.local.json
-
-# Rider
-.idea/
-*.sln.iml
-
-# Mac
-.DS_Store
-
-# Node (if any frontend)
-node_modules/
-dist/
-.angular/
+.env.*
+!.env.example
+appsettings.Development.json
+*.db
+*.mdf
+*.ldf

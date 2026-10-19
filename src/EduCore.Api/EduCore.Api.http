@@ -1,0 +1,5 @@
+@EduCore.Api_HostAddress = https://localhost:7260
+
+# Simple liveness probe; use /health/ready when the SQL Server connection must also be checked.
+GET {{EduCore.Api_HostAddress}}/health
+Accept: application/json

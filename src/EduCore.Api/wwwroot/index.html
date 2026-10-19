@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EduCore</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <!-- The header controls the signed-in user's school context and session. -->
+  <header class="topbar">
+    <a class="brand" href="/">EduCore</a>
+    <div class="top-actions">
+      <label class="sr-only" for="school-select">Active school</label>
+      <select id="school-select" aria-label="Active school"></select>
+      <span id="current-user" class="muted"></span>
+      <button id="logout" class="button-secondary" type="button">Sign out</button>
+    </div>
+  </header>
+  <main class="container">
+    <!-- The school title and current user are filled from the validated session endpoint. -->
+    <section class="welcome">
+      <p class="eyebrow">SCHOOL OVERVIEW</p>
+      <h1 id="school-title">Loading school…</h1>
+      <p class="muted">Manage student records for your active school.</p>
+    </section>
+    <!-- Student search, editing, results, and pagination are wired by app.js. -->
+    <section class="panel">
+      <div class="section-heading">
+        <div><h2>Students</h2><p id="student-count" class="muted"></p></div>
+        <form id="search-form" class="search-form">
+          <label class="sr-only" for="search">Search students</label>
+          <input id="search" type="search" placeholder="Search by name or ID">
+          <button class="button-secondary" type="submit">Search</button>
+        </form>
+      </div>
+      <form id="student-form" class="student-form">
+        <input id="student-id" type="hidden">
+        <div><label for="local-id">Student ID</label><input id="local-id" maxlength="80" required></div>
+        <div><label for="first-name">First name</label><input id="first-name" maxlength="100" required></div>
+        <div><label for="last-name">Last name</label><input id="last-name" maxlength="100" required></div>
+        <div class="form-actions">
+          <button id="save-student" type="submit">Add student</button>
+          <button id="cancel-edit" class="button-secondary" type="button" hidden>Cancel</button>
+        </div>
+        <p id="form-message" class="message" role="status" aria-live="polite"></p>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Student ID</th><th scope="col">Name</th><th scope="col">Actions</th></tr></thead>
+          <tbody id="students"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button id="previous-page" class="button-secondary" type="button">Previous</button>
+        <span id="page-label" class="muted"></span>
+        <button id="next-page" class="button-secondary" type="button">Next</button>
+      </div>
+    </section>
+  </main>
+  <!-- Defer the dashboard logic until its DOM controls are available. -->
+  <script src="/app.js" defer></script>
+</body>
+</html>
