@@ -130,7 +130,9 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy(PlatformPermissions.RolesManage, policy =>
         RequirePlatformPermission(policy, PlatformPermissions.RolesManage))
     .AddPolicy(PlatformPermissions.AuditView, policy =>
-        RequirePlatformPermission(policy, PlatformPermissions.AuditView));
+        RequirePlatformPermission(policy, PlatformPermissions.AuditView))
+    .AddPolicy(PlatformPermissions.IdentityManage, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.IdentityManage));
 builder.Services.AddDbContext<EduCoreDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddRateLimiter(options =>
@@ -145,6 +147,20 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
+    options.AddPolicy("identity-action", context =>
+    {
+        var subjectId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var clientKey = $"{subjectId ?? "anonymous"}:{context.Connection.RemoteIpAddress}";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            clientKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(15),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -159,6 +175,7 @@ builder.Services.AddScoped<StudentService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<PlatformAdministrationService>();
 builder.Services.AddScoped<PlatformAdminBootstrapper>();
+builder.Services.AddHttpClient<KeycloakIdentityManagementService>();
 builder.Services.AddScoped<ActiveSchoolMembershipHandler>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler>(
     services => services.GetRequiredService<ActiveSchoolMembershipHandler>());
@@ -206,6 +223,17 @@ if (args.Contains("--provision-platform-admin", StringComparer.OrdinalIgnoreCase
     await scope.ServiceProvider.GetRequiredService<PlatformAdminBootstrapper>()
         .ProvisionFirstAdministratorAsync(CancellationToken.None);
     Console.WriteLine("The configured platform administrator was provisioned.");
+    return;
+}
+
+if (args.Contains("--provision-platform-identity-management", StringComparer.OrdinalIgnoreCase))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<EduCoreDbContext>();
+    await dbContext.Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<PlatformAdminBootstrapper>()
+        .ProvisionIdentityManagementCapabilityAsync(CancellationToken.None);
+    Console.WriteLine("The existing platform security administrator can manage Keycloak identity actions.");
     return;
 }
 

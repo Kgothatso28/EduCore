@@ -11,6 +11,7 @@ public static class PlatformPermissions
     public const string RolesView = "platform.roles.view";
     public const string RolesManage = "platform.roles.manage";
     public const string AuditView = "platform.audit.view";
+    public const string IdentityManage = "platform.identity.manage";
 
     /// <summary>Permissions ordinary administrators may explicitly delegate.</summary>
     public static IReadOnlySet<string> Delegable { get; } = new HashSet<string>(
@@ -35,6 +36,7 @@ public static class PlatformPermissions
         UsersManage,
         RolesView,
         RolesManage,
-        AuditView
+        AuditView,
+        IdentityManage
     ];
 }

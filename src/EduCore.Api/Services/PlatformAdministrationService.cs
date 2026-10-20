@@ -23,7 +23,8 @@ public sealed class PlatformAdministrationService(EduCoreDbContext dbContext)
             await dbContext.SchoolMemberships.Where(item => item.IsActive)
                 .Select(item => item.SubjectId).Distinct().CountAsync(cancellationToken),
             await dbContext.PlatformLoginEvents.CountAsync(
-                item => item.CreatedUtc >= now.AddDays(-1) && item.Succeeded, cancellationToken),
+                item => item.CreatedUtc >= now.AddDays(-1) &&
+                        item.Succeeded && item.Outcome == "success", cancellationToken),
             await dbContext.PlatformLoginEvents.CountAsync(
                 item => item.CreatedUtc >= now.AddDays(-1) && !item.Succeeded, cancellationToken),
             await dbContext.PlatformAuditEvents.CountAsync(
@@ -101,8 +102,15 @@ public sealed class PlatformAdministrationService(EduCoreDbContext dbContext)
             .Select(group => new MembershipCount(group.Key, group.Count(),
                 group.Count(item => item.IsActive)))
             .ToListAsync(cancellationToken);
+        var administrators = await dbContext.SchoolMemberships.AsNoTracking()
+            .Where(item => item.SchoolId == schoolId &&
+                           item.Role == SchoolRole.SchoolAdministrator)
+            .OrderBy(item => item.SubjectId)
+            .Select(item => new SchoolAdministratorSummary(item.SubjectId, item.IsActive))
+            .ToListAsync(cancellationToken);
         return new SchoolDetails(
-            school.Id, school.Name, school.Slug, school.Status, school.CreatedUtc, memberships);
+            school.Id, school.Name, school.Slug, school.Status, school.CreatedUtc,
+            memberships, administrators);
     }
 
     /// <summary>Creates a school and its immutable audit event in one database save.</summary>
@@ -156,6 +164,57 @@ public sealed class PlatformAdministrationService(EduCoreDbContext dbContext)
             $"{oldStatus} -> {school.Status}"));
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    /// <summary>Creates a school-local role for an explicitly supplied trusted subject.</summary>
+    public async Task<MembershipCreateResult> CreateMembershipAsync(
+        string actorSubjectId,
+        Guid schoolId,
+        string subjectId,
+        SchoolRole role,
+        CancellationToken cancellationToken)
+    {
+        if (actorSubjectId == subjectId)
+        {
+            return new MembershipCreateResult(MembershipCreateStatus.SelfAssignment, null);
+        }
+
+        if (!await dbContext.Schools.AnyAsync(
+                school => school.Id == schoolId, cancellationToken))
+        {
+            return new MembershipCreateResult(MembershipCreateStatus.SchoolNotFound, null);
+        }
+
+        if (await dbContext.SchoolMemberships.AnyAsync(
+                membership => membership.SchoolId == schoolId &&
+                              membership.SubjectId == subjectId, cancellationToken))
+        {
+            return new MembershipCreateResult(MembershipCreateStatus.AlreadyExists, null);
+        }
+
+        var membership = new SchoolMembership(schoolId, subjectId, role);
+        dbContext.SchoolMemberships.Add(membership);
+        dbContext.PlatformAuditEvents.Add(new PlatformAuditEvent(
+            actorSubjectId, "membership.created", "membership", membership.Id.ToString(),
+            $"subject={subjectId}; school={schoolId}; role={role}."));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new MembershipCreateResult(MembershipCreateStatus.Created, membership.Id);
+    }
+
+    /// <summary>Returns safe membership metadata for a platform user-details workflow.</summary>
+    public async Task<MembershipDetails?> GetMembershipAsync(
+        Guid membershipId,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.SchoolMemberships.AsNoTracking()
+            .Where(item => item.Id == membershipId)
+            .Join(dbContext.Schools.AsNoTracking(),
+                membership => membership.SchoolId,
+                school => school.Id,
+                (membership, school) => new MembershipDetails(
+                    membership.Id, membership.SubjectId, school.Id, school.Name,
+                    membership.Role, membership.IsActive))
+            .SingleOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>Lists known identities using memberships and demo credentials, not academic records.</summary>
@@ -461,9 +520,21 @@ public sealed class PlatformAdministrationService(EduCoreDbContext dbContext)
     public sealed record MembershipCount(SchoolRole Role, int Total, int Active);
     public sealed record SchoolDetails(
         Guid Id, string Name, string Slug, SchoolStatus Status,
-        DateTimeOffset CreatedUtc, IReadOnlyList<MembershipCount> MembershipCounts);
+        DateTimeOffset CreatedUtc, IReadOnlyList<MembershipCount> MembershipCounts,
+        IReadOnlyList<SchoolAdministratorSummary> Administrators);
+    public sealed record SchoolAdministratorSummary(string SubjectId, bool IsActive);
     public sealed record UserMembership(
         Guid Id, Guid SchoolId, string SchoolName, SchoolRole Role, bool IsActive);
+    public sealed record MembershipDetails(
+        Guid Id, string SubjectId, Guid SchoolId, string SchoolName, SchoolRole Role, bool IsActive);
+    public sealed record MembershipCreateResult(MembershipCreateStatus Status, Guid? MembershipId);
+    public enum MembershipCreateStatus
+    {
+        Created,
+        SchoolNotFound,
+        AlreadyExists,
+        SelfAssignment
+    }
     public sealed record PlatformUserSummary(
         string SubjectId, string LoginIdentifier, string AccountStatus,
         IReadOnlyList<UserMembership> Memberships, IReadOnlyList<string> Permissions);

@@ -12,6 +12,79 @@ const state = {
 const schoolStatuses = ["Active", "Suspended", "Archived"];
 const schoolRoles = ["SchoolAdministrator", "Teacher", "Staff", "Student", "Guardian"];
 
+function setupNavigationDrawer() {
+  const toggle = document.querySelector("#platform-menu-toggle");
+  const sidebar = document.querySelector("#platform-sidebar");
+  const backdrop = document.querySelector("#platform-nav-backdrop");
+  const main = document.querySelector("main");
+  const headerActions = document.querySelector(".top-actions");
+  const brand = document.querySelector(".brand");
+  const mobile = window.matchMedia("(max-width: 880px)");
+  const setOpen = (open, restoreFocus = false) => {
+    const isOpen = open && mobile.matches;
+    toggle.setAttribute("aria-expanded", String(isOpen));
+    toggle.setAttribute("aria-label", isOpen ? "Close navigation" : "Open navigation");
+    sidebar.inert = mobile.matches && !isOpen;
+    if (main) main.inert = isOpen;
+    if (headerActions) headerActions.inert = isOpen;
+    if (brand) brand.inert = isOpen;
+    backdrop.hidden = !isOpen;
+    backdrop.tabIndex = -1;
+    document.body.classList.toggle("nav-open", isOpen);
+    if (isOpen) sidebar.querySelector("a")?.focus();
+    else if (restoreFocus) toggle.focus();
+  };
+
+  toggle.addEventListener("click", () =>
+    setOpen(toggle.getAttribute("aria-expanded") !== "true"));
+  backdrop.addEventListener("click", () => setOpen(false, true));
+  sidebar.addEventListener("click", event => {
+    const link = event.target.closest("a");
+    if (!link || !mobile.matches) return;
+    setOpen(false, true);
+    if (link.hash) {
+      const target = document.querySelector(link.hash);
+      if (target) {
+        target.tabIndex = -1;
+        requestAnimationFrame(() => target.focus({ preventScroll: true }));
+      }
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Tab" && toggle.getAttribute("aria-expanded") === "true") {
+      const items = [toggle, ...sidebar.querySelectorAll("a[href]:not([hidden])")];
+      const index = items.indexOf(document.activeElement);
+      if (event.shiftKey && index === 0) {
+        event.preventDefault();
+        items.at(-1).focus();
+      } else if (!event.shiftKey && index === items.length - 1) {
+        event.preventDefault();
+        items[0].focus();
+      }
+    }
+    if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+      setOpen(false, true);
+    }
+  });
+  mobile.addEventListener("change", () => setOpen(false));
+  setOpen(false);
+}
+
+function updateCurrentNavigation() {
+  const activeHash = location.hash || "#overview";
+  for (const link of document.querySelectorAll("[data-nav-link]")) {
+    if (link.getAttribute("href") === activeHash) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
+}
+
+setupNavigationDrawer();
+updateCurrentNavigation();
+window.addEventListener("hashchange", updateCurrentNavigation);
+
 // Send same-origin requests with CSRF protection and surface API failures to the operator.
 async function platformApi(path, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -43,6 +116,25 @@ function platformCell(value) {
   const cell = document.createElement("td");
   cell.textContent = value == null ? "" : String(value);
   return cell;
+}
+
+function platformStatusCell(value, state) {
+  const cell = document.createElement("td");
+  const badge = document.createElement("span");
+  badge.className = `status-badge is-${state}`;
+  badge.textContent = value;
+  cell.append(badge);
+  return cell;
+}
+
+function platformEmptyRow(body, columnCount, message) {
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+  cell.className = "empty-row";
+  cell.colSpan = columnCount;
+  cell.textContent = message;
+  row.append(cell);
+  body.append(row);
 }
 
 // Convert JSON enum values to names while also accepting already-named values.
@@ -133,10 +225,12 @@ async function loadSchools() {
   for (const school of result.items) {
     const schoolStatus = enumName(school.status, schoolStatuses);
     const row = document.createElement("tr");
+    const statusClass = schoolStatus === "Active" ? "active" :
+      schoolStatus === "Suspended" ? "warning" : "neutral";
     row.append(
       platformCell(school.name),
       platformCell(school.slug),
-      platformCell(schoolStatus),
+      platformStatusCell(schoolStatus, statusClass),
       platformCell(utcTimestamp(school.createdUtc)),
       platformCell(school.membershipCount));
     const actions = document.createElement("td");
@@ -167,6 +261,7 @@ async function loadSchools() {
     row.append(actions);
     body.append(row);
   }
+  if (!result.items.length) platformEmptyRow(body, 6, "No schools match these filters.");
   configurePager("schools", result, state.schoolPage, loadSchools);
 }
 
@@ -265,6 +360,7 @@ async function loadUsers() {
     row.append(permissions);
     body.append(row);
   }
+  if (!result.items.length) platformEmptyRow(body, 4, "No identities match this search.");
   configurePager("users", result, state.userPage, loadUsers);
 }
 
@@ -293,6 +389,7 @@ async function loadPermissions() {
     row.append(action);
     body.append(row);
   }
+  if (!grants.length) platformEmptyRow(body, 3, "No delegated permissions are available.");
 }
 
 // Load a page of EduCore-managed authentication attempts.
@@ -310,10 +407,12 @@ async function loadLoginHistory() {
     row.append(
       platformCell(utcTimestamp(item.createdUtc)),
       platformCell(item.accountIdentifier),
-      platformCell(item.succeeded ? "Success" : "Failure"),
+      platformStatusCell(item.succeeded ? "Success" : "Failure",
+        item.succeeded ? "active" : "error"),
       platformCell(item.outcome));
     body.append(row);
   }
+  if (!result.items.length) platformEmptyRow(body, 4, "No login events match this search.");
   configurePager("login", result, state.loginPage, loadLoginHistory);
 }
 
@@ -337,6 +436,7 @@ async function loadAuditEvents() {
       platformCell(item.details));
     body.append(row);
   }
+  if (!result.items.length) platformEmptyRow(body, 5, "No audit events match this search.");
   configurePager("audit", result, state.auditPage, loadAuditEvents);
 }
 
@@ -401,6 +501,24 @@ document.querySelector("#school-create-form").addEventListener("submit", event =
   });
 });
 
+// Assign a school-only role; the backend records the change and blocks self-assignment.
+document.querySelector("#membership-create-form").addEventListener("submit", event => {
+  event.preventDefault();
+  runPlatformAction(async () => {
+    const schoolId = document.querySelector("#membership-school-id").value.trim();
+    const subjectId = document.querySelector("#membership-subject-id").value.trim();
+    const role = document.querySelector("#membership-role").value;
+    await platformApi(`/api/v1/platform/schools/${encodeURIComponent(schoolId)}/memberships`, {
+      method: "POST",
+      body: JSON.stringify({ subjectId, role })
+    });
+    event.currentTarget.reset();
+    showPlatformMessage("School membership assigned and audited.");
+    setPage("user", 1);
+    await Promise.all([loadUsers(), loadSchools()]);
+  });
+});
+
 // Grant only server-allowlisted platform permissions; self-grants are rejected by the API.
 document.querySelector("#grant-form").addEventListener("submit", event => {
   event.preventDefault();
@@ -432,6 +550,22 @@ document.querySelector("#self-password-form").addEventListener("submit", event =
     location.assign("/login.html");
   });
 });
+
+// Keep provider-backed password, MFA, and session actions with Keycloak.
+for (const [buttonId, route, successMessage] of [
+  ["identity-recovery", "password-recovery", "Password recovery email requested from Keycloak."],
+  ["identity-mfa", "mfa-enrollment", "TOTP enrollment email requested from Keycloak."],
+  ["identity-revoke", "sessions/revoke", "Keycloak sessions and refresh tokens revoked."]
+]) {
+  document.querySelector(`#${buttonId}`).addEventListener("click", () => runPlatformAction(async () => {
+    const subjectId = document.querySelector("#identity-subject-id").value.trim();
+    await platformApi(
+      `/api/v1/platform/users/${encodeURIComponent(subjectId)}/${route}`,
+      { method: "POST" });
+    showPlatformMessage(successMessage);
+    await loadAuditEvents();
+  }));
+}
 
 // Sign out through the existing CSRF-protected authentication endpoint.
 document.querySelector("#platform-logout").addEventListener("click", () => runPlatformAction(async () => {

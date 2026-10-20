@@ -128,9 +128,19 @@ public static class DemoAuthenticationEndpoints
         }).RequireAuthorization();
 
         // Clear the demo authentication cookie so a stale school selection can be recovered.
-        endpoints.MapPost("/api/v1/auth/logout", async (HttpContext context) =>
+        endpoints.MapPost("/api/v1/auth/logout", async (
+            HttpContext context,
+            DemoAuthenticationService authentication,
+            CancellationToken cancellationToken) =>
         {
+            var subjectId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            if (subjectId is not null)
+            {
+                await authentication.RecordLoginEventAsync(
+                    subjectId, true, "logout", cancellationToken);
+            }
+
             return Results.NoContent();
         }).RequireAuthorization();
 

@@ -1,44 +1,50 @@
-# Tenant security test report
+# EduCore 1.2 security and Super Admin verification
 
-- Scope: EDUCORE first tenant-foundation increment
-- Test provider: SQL Server 2025 LocalDB through EF Core SQL Server provider
-- Result: 11 automated tests passed
-- Production SQL Server, identity provider, and network deployment were not tested.
+## Scope and result
 
-## Coverage in this increment
+This report covers the existing tenant-aware school foundation and the Super Admin administration changes. Verification used SQL Server LocalDB for automated tests and a disposable development database for the runtime workflow. No production database was reset or used.
 
-| Check | Result |
+| Verification | Result |
 |---|---|
-| School A cannot list/read/update/delete School B's student | Covered: query filter and resource lookup tests |
-| Foreign record ID does not bypass the tenant filter | Covered: find, update, and delete return no resource for the other school |
-| Create authority comes from validated server tenant context, not a request SchoolId property | Covered at service/DTO boundary |
-| School membership and active school status are checked | Covered, including inactive membership and suspended school |
-| Legitimate multi-school identity resolves each explicitly claimed active school separately | Covered; a school without membership is rejected |
-| School teacher cannot authorize an administrator-only student operation | Covered |
-| School roles cannot represent platform-administrator privilege | Covered at role model boundary; platform-grant operation is not implemented |
-| Tenant-scoped uniqueness | Covered against SQL Server: same local student ID rejected within one school and accepted in another |
-| Missing tenant context fails closed | Covered for reads and writes |
-| Tenant ID mutation after insert | Covered by write guard |
-| SQL Server migration/schema application | Applied during test setup using a fresh per-test database |
+| Automated API tests | Passed: 30; failed: 0; skipped: 0 |
+| Solution build | Passed: 0 warnings; 0 errors |
+| Platform JavaScript syntax | Passed |
+| `git diff --check` | Passed |
+| Local runtime workflow | Passed for the routes and behaviors listed below |
+| Live Keycloak, SMTP, production SQL Server, penetration testing | Not tested |
 
-## Not covered yet (release blockers for the corresponding features)
+## Verified implementation
 
-- Staff, class, attendance, grade, fee, invoice, payment, document, and report models/API operations do not exist yet; their cross-tenant CRUD/export tests remain unimplemented.
-- No background queue, scheduled report, import pipeline, or tenant-aware worker exists; no job execution test is claimed.
-- No file storage, export, notification, cache, or search service exists yet; no leakage test is claimed for those surfaces.
-- No tenant provisioning/suspension/archive/retention/deletion workflows, administrative audit pipeline, or platform-admin API exists.
-- No SQL Server Row-Level Security, production SQL Server, connection-pool context reset, deployment migration rollback, or application restart/restore test is included.
-- The request pipeline has not been exercised against an external JWT issuer; unit tests validate membership resolution and authorization handlers using test principals.
-- No adversarial penetration testing, data-flow runtime tracing, SOC 2 audit, or certification was performed.
+| Area | Evidence and boundary |
+|---|---|
+| Tenant isolation | Automated tests cover tenant-scoped student access, foreign IDs, membership validation, active school status, missing tenant context, tenant-scoped uniqueness, and write guards. |
+| Platform authorization | Platform grants remain distinct from school roles. School users cannot grant themselves platform privileges. The identity-management capability is bootstrap-only and has a one-time existing-admin provisioning path. |
+| School administration | Runtime verification covered school listing and details, administrator identities, membership creation and lookup, suspension/reactivation, and denial of school API access while suspended. |
+| Privacy separation | Platform administration operates on school, account, membership, permission, and audit metadata; it does not grant access to student marks or detailed attendance. Student APIs remain tenant-scoped. |
+| Audit history | Demo authentication logout is recorded. Platform school, membership, permission, password-change, and identity-management actions are audited without passwords, tokens, or authentication secrets. |
+| Keycloak integration | Automated fake-HTTP tests cover password-recovery action emails, TOTP setup emails, session logout, HTTPS configuration checks, and safe provider errors. Runtime verification confirmed missing provider configuration fails closed. |
+| Schema | No database schema or migration changes were required. |
 
-The tests prove only the existing student foundation and related authorization/schema invariants. All uncovered data categories and processing surfaces must have equivalent tenant-isolation tests before implementation is considered complete.
+## Remaining gaps and deployment requirements
 
-## Latest verification
+- Keycloak is an integration point, not a verified production identity deployment. Configure a dedicated confidential service-account client with least-privilege user-management permissions, realm policy, SMTP, hosted account recovery, and an MFA-enforcing authentication flow.
+- Live password recovery, Super Admin self-recovery, MFA enforcement, email delivery, and provider session revocation have not been tested end to end. Do not represent them as production-ready until tested against the configured provider.
+- EduCore does not ingest Keycloak login success, failure, or logout events. Login history currently covers events observable by EduCore's development/demo authentication.
+- Keycloak logout revokes provider sessions and refresh tokens, but locally validated access JWTs may remain valid until expiry. Immediate revocation requires short-lived access tokens or online introspection/revocation.
+- No account-recovery token flow is implemented in EduCore itself; recovery is delegated to the configured identity provider.
+- Attendance, grades, finance, timetables, announcements, course materials, and parent dashboards are not implemented. Their privacy and tenant-isolation controls must be tested when those modules are added.
+- Production SQL Server configuration, deployment operations, backups and restore, rate-limit behavior under load, external-provider event ingestion, penetration testing, and operational audit retention/review remain unverified.
+- These checks are not a penetration test, SOC 2 audit, certification, or production-readiness assessment.
 
-- `dotnet test tests\EduCore.Api.Tests\EduCore.Api.Tests.csproj`: passed, 11/11.
-- The test fixture applies the generated initial migration to a unique SQL Server LocalDB database per test and deletes the database during cleanup. A post-test LocalDB query confirmed no `EduCoreTenantTests_*` database remained.
-- `dotnet build EduCore.sln --no-restore`: passed, 0 warnings, 0 errors.
-- `dotnet list src\EduCore.Api\EduCore.Api.csproj package --vulnerable --include-transitive`: no vulnerable packages reported by the configured NuGet advisory source.
-- `dotnet list tests\EduCore.Api.Tests\EduCore.Api.Tests.csproj package --vulnerable --include-transitive`: no vulnerable packages reported by the configured NuGet advisory source.
+## Reproduction
 
-These results apply only to the source and dependency state at this increment; rerun after changes and before deployment.
+From the repository root:
+
+```powershell
+dotnet test tests\EduCore.Api.Tests\EduCore.Api.Tests.csproj --no-restore
+dotnet build EduCore.sln --no-restore
+node --check src\EduCore.Api\wwwroot\platform.js
+git diff --check
+```
+
+Automated tests use unique test databases. The runtime smoke test used a separately named disposable LocalDB database and separate admin/school sessions; it verified the school registry/detail workflow, membership assignment, status enforcement, logout history, platform UI response, and missing-Keycloak-configuration guard. The disposable database and runtime process were removed afterward.

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Net;
 using EduCore.Api.Domain;
 using EduCore.Api.Security;
 using EduCore.Api.Services;
@@ -167,6 +168,122 @@ public static class PlatformEndpoints
                 : Results.NotFound();
         }).RequireAuthorization(PlatformPermissions.UsersManage);
 
+        group.MapGet("/memberships/{membershipId:guid}", async (
+            Guid membershipId,
+            PlatformAdministrationService administration,
+            CancellationToken cancellationToken) =>
+        {
+            var membership = await administration.GetMembershipAsync(
+                membershipId, cancellationToken);
+            return membership is null ? Results.NotFound() : Results.Ok(membership);
+        }).RequireAuthorization(PlatformPermissions.UsersView);
+
+        group.MapPost("/schools/{schoolId:guid}/memberships", async (
+            Guid schoolId,
+            CreateMembershipRequest request,
+            ClaimsPrincipal user,
+            PlatformAdministrationService administration,
+            CancellationToken cancellationToken) =>
+        {
+            var subjectId = request.SubjectId?.Trim();
+            if (string.IsNullOrWhiteSpace(subjectId) || subjectId.Length > 200 ||
+                !Enum.TryParse<SchoolRole>(request.Role, true, out var role) ||
+                !Enum.IsDefined(role))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["membership"] = ["A valid trusted subject identifier and school role are required."]
+                });
+            }
+
+            var actor = GetSubjectId(user);
+            if (actor is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await administration.CreateMembershipAsync(
+                actor, schoolId, subjectId, role, cancellationToken);
+            return result.Status switch
+            {
+                PlatformAdministrationService.MembershipCreateStatus.Created =>
+                    Results.Created(
+                        $"/api/v1/platform/memberships/{result.MembershipId}",
+                        new { id = result.MembershipId }),
+                PlatformAdministrationService.MembershipCreateStatus.SchoolNotFound =>
+                    Results.NotFound(),
+                PlatformAdministrationService.MembershipCreateStatus.AlreadyExists =>
+                    Results.Conflict(new { error = "That identity already has a membership in this school." }),
+                _ => Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["subjectId"] = ["Administrators cannot assign school roles to themselves."]
+                })
+            };
+        }).RequireAuthorization(PlatformPermissions.UsersManage);
+
+        group.MapPost("/users/{subjectId}/password-recovery", async (
+            string subjectId,
+            ClaimsPrincipal user,
+            KeycloakIdentityManagementService identityManagement,
+            EduCore.Api.Data.EduCoreDbContext dbContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+        {
+            return await RunIdentityActionAsync(
+                "identity.password_recovery",
+                subjectId,
+                user,
+                identityManagement.IsConfigured,
+                ct => identityManagement.SendPasswordRecoveryAsync(subjectId, ct),
+                dbContext,
+                loggerFactory.CreateLogger("EduCore.PlatformIdentity"),
+                cancellationToken);
+        })
+        .RequireAuthorization(PlatformPermissions.IdentityManage)
+        .RequireRateLimiting("identity-action");
+
+        group.MapPost("/users/{subjectId}/mfa-enrollment", async (
+            string subjectId,
+            ClaimsPrincipal user,
+            KeycloakIdentityManagementService identityManagement,
+            EduCore.Api.Data.EduCoreDbContext dbContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+        {
+            return await RunIdentityActionAsync(
+                "identity.mfa_enrollment",
+                subjectId,
+                user,
+                identityManagement.IsConfigured,
+                ct => identityManagement.RequireTotpEnrollmentAsync(subjectId, ct),
+                dbContext,
+                loggerFactory.CreateLogger("EduCore.PlatformIdentity"),
+                cancellationToken);
+        })
+        .RequireAuthorization(PlatformPermissions.IdentityManage)
+        .RequireRateLimiting("identity-action");
+
+        group.MapPost("/users/{subjectId}/sessions/revoke", async (
+            string subjectId,
+            ClaimsPrincipal user,
+            KeycloakIdentityManagementService identityManagement,
+            EduCore.Api.Data.EduCoreDbContext dbContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+        {
+            return await RunIdentityActionAsync(
+                "identity.sessions.revocation",
+                subjectId,
+                user,
+                identityManagement.IsConfigured,
+                ct => identityManagement.RevokeSessionsAsync(subjectId, ct),
+                dbContext,
+                loggerFactory.CreateLogger("EduCore.PlatformIdentity"),
+                cancellationToken);
+        })
+        .RequireAuthorization(PlatformPermissions.IdentityManage)
+        .RequireRateLimiting("identity-action");
+
         group.MapGet("/permissions", async (
             PlatformAdministrationService administration,
             CancellationToken cancellationToken) =>
@@ -295,6 +412,77 @@ public static class PlatformEndpoints
             ["query"] = ["Invalid search, UTC time range, or pagination values."]
         });
 
+    private static async Task<IResult> RunIdentityActionAsync(
+        string action,
+        string subjectId,
+        ClaimsPrincipal user,
+        bool providerConfigured,
+        Func<CancellationToken, Task> operation,
+        EduCore.Api.Data.EduCoreDbContext dbContext,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var actor = GetSubjectId(user);
+        if (actor is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(subjectId) || subjectId.Length > 200)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["subjectId"] = ["A valid identity-provider subject is required."]
+            });
+        }
+
+        if (!providerConfigured)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Identity management is not configured",
+                detail: "Configure the Keycloak identity-management integration before using this operation.");
+        }
+
+        dbContext.PlatformAuditEvents.Add(new PlatformAuditEvent(
+            actor, $"{action}.requested", "identity", subjectId, null));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await operation(cancellationToken);
+        }
+        catch (KeycloakIdentityManagementException exception)
+        {
+            logger.LogError(
+                "Keycloak identity operation {Action} failed with HTTP status {StatusCode}.",
+                action, (int)exception.StatusCode);
+            dbContext.PlatformAuditEvents.Add(new PlatformAuditEvent(
+                actor, $"{action}.failed", "identity", subjectId,
+                $"Provider status={(int)exception.StatusCode}."));
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return Results.Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Identity provider operation failed",
+                detail: "Keycloak did not complete the requested identity operation.");
+        }
+        catch (HttpRequestException exception)
+        {
+            logger.LogError(exception, "Keycloak identity operation {Action} could not reach the provider.", action);
+            dbContext.PlatformAuditEvents.Add(new PlatformAuditEvent(
+                actor, $"{action}.failed", "identity", subjectId, "Provider connection failed."));
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return Results.Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Identity provider is unavailable",
+                detail: "Keycloak could not be reached to complete the requested operation.");
+        }
+
+        dbContext.PlatformAuditEvents.Add(new PlatformAuditEvent(
+            actor, $"{action}.completed", "identity", subjectId, null));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Accepted(value: new { status = "accepted" });
+    }
+
     /// <summary>Returns one unambiguous trusted subject claim from the authenticated principal.</summary>
     private static string? GetSubjectId(ClaimsPrincipal user)
     {
@@ -306,4 +494,5 @@ public static class PlatformEndpoints
     public sealed record SetSchoolStatusRequest(string Status);
     public sealed record UpdateMembershipRequest(string Role, bool IsActive);
     public sealed record GrantPermissionRequest(string SubjectId, string Permission);
+    public sealed record CreateMembershipRequest(string? SubjectId, string? Role);
 }

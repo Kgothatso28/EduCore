@@ -7,19 +7,38 @@
   <link rel="stylesheet" href="/app.css">
 </head>
 <body class="auth-page">
-  <main class="auth-card">
-    <a class="brand" href="/">EduCore</a>
-    <h1>Sign in</h1>
-    <p class="muted">Use your school account to continue.</p>
-    <!-- app.js posts these named fields to the Development-only demo login endpoint. -->
-    <form id="login-form">
-      <label for="username">Username</label>
-      <input id="username" name="userName" autocomplete="username" required>
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
-      <button type="submit">Sign in</button>
-      <p id="message" class="message" role="status" aria-live="polite"></p>
-    </form>
+  <main class="auth-layout">
+    <section class="auth-intro" aria-labelledby="auth-title">
+      <a class="brand auth-brand" href="/" aria-label="EduCore home">
+        <span class="brand-mark" aria-hidden="true">E</span><span>EduCore</span>
+      </a>
+      <p class="eyebrow">SCHOOL MANAGEMENT, MADE CLEAR</p>
+      <h1 id="auth-title">A calmer way to run your school day.</h1>
+      <p>One secure place for school teams, teachers and learners to access the information they need.</p>
+      <div class="auth-assurance"><span class="secure-dot" aria-hidden="true"></span>School access is verified for your account</div>
+    </section>
+    <section class="auth-card" aria-labelledby="sign-in-title">
+      <p class="eyebrow">WELCOME BACK</p>
+      <h2 id="sign-in-title">Sign in</h2>
+      <p class="muted">Use your school account to continue.</p>
+      <form id="login-form">
+        <div class="field-group">
+          <label for="username">Username</label>
+          <input id="username" name="userName" autocomplete="username" required>
+        </div>
+        <div class="field-group">
+          <label for="password">Password</label>
+          <div class="password-control">
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+            <button id="toggle-password" class="password-toggle button-secondary" type="button"
+              aria-controls="password" aria-pressed="false">Show</button>
+          </div>
+        </div>
+        <button class="auth-submit" type="submit">Sign in</button>
+        <p id="message" class="message" role="status" aria-live="polite"></p>
+      </form>
+      <p class="auth-footnote">Your account access is managed by your school administrator.</p>
+    </section>
   </main>
   <!-- Shared client logic handles CSRF, sign-in submission, and accessible errors. -->
   <script src="/app.js" defer></script>

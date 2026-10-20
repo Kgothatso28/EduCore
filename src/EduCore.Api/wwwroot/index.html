@@ -7,24 +7,52 @@
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-  <!-- The header controls the signed-in user's school context and session. -->
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="topbar">
-    <a class="brand" href="/">EduCore</a>
+    <div class="topbar-leading">
+      <button id="menu-toggle" class="menu-toggle button-secondary" type="button"
+        aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation">
+        <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>Menu</span>
+      </button>
+      <a class="brand" href="/" aria-label="EduCore home">
+        <span class="brand-mark" aria-hidden="true">E</span><span>EduCore</span>
+      </a>
+    </div>
     <div class="top-actions">
+      <div class="school-context">
+        <label for="school-select">School</label>
+        <select id="school-select" aria-label="Active school">
+          <option value="">Loading school…</option>
+        </select>
+      </div>
       <a class="button-secondary" href="/platform.html">Platform administration</a>
-      <label class="sr-only" for="school-select">Active school</label>
-      <select id="school-select" aria-label="Active school"></select>
-      <span id="current-user" class="muted"></span>
+      <span id="current-user" class="account-name" aria-live="polite"></span>
       <button id="logout" class="button-secondary" type="button">Sign out</button>
     </div>
   </header>
-  <main class="container">
-    <p id="dashboard-message" class="message" role="status" aria-live="polite"></p>
-    <section class="welcome">
+  <button id="nav-backdrop" class="nav-backdrop" type="button" aria-label="Close navigation" hidden></button>
+  <div class="app-shell">
+    <aside id="app-sidebar" class="sidebar" aria-label="School workspace navigation" inert>
+      <p class="sidebar-caption">SCHOOL WORKSPACE</p>
+      <nav class="sidebar-nav">
+        <a href="#school-title" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Overview</a>
+        <a href="#student-management" data-nav-role="SchoolAdministrator" data-nav-link hidden><span class="nav-marker" aria-hidden="true"></span>Students</a>
+        <a href="#principal-analytics" data-nav-role="SchoolAdministrator" data-nav-link hidden><span class="nav-marker" aria-hidden="true"></span>Insights</a>
+        <a href="#teacher-dashboard" data-nav-role="Teacher" data-nav-link hidden><span class="nav-marker" aria-hidden="true"></span>My classes</a>
+        <a href="#teacher-classes" data-nav-role="Teacher" data-nav-link hidden><span class="nav-marker" aria-hidden="true"></span>Class roster</a>
+        <a href="#student-dashboard" data-nav-role="Student" data-nav-link hidden><span class="nav-marker" aria-hidden="true"></span>My profile</a>
+        <a href="#planned-modules" data-nav-link><span class="nav-marker" aria-hidden="true"></span>School services</a>
+      </nav>
+      <div class="sidebar-footnote"><span class="secure-dot" aria-hidden="true"></span>Secure school workspace</div>
+    </aside>
+    <main id="main-content" class="container app-content" tabindex="-1">
+      <p id="dashboard-message" class="message" role="status" aria-live="polite"></p>
+      <section class="welcome" id="workspace-overview">
       <p id="role-label" class="eyebrow">SCHOOL WORKSPACE</p>
-      <h1 id="school-title">Loading school…</h1>
+      <h1 id="school-title" tabindex="-1">Loading school…</h1>
       <p id="dashboard-description" class="muted">Loading your authorized dashboard.</p>
-    </section>
+      </section>
 
     <section id="principal-dashboard" class="dashboard-grid" hidden aria-label="School overview">
       <article class="stat-card"><span>Current student records</span><strong id="metric-students">—</strong></article>
@@ -173,7 +201,8 @@
         <button id="next-page" class="button-secondary" type="button">Next</button>
       </div>
     </section>
-  </main>
+    </main>
+  </div>
   <!-- Defer the dashboard logic until its DOM controls are available. -->
   <script src="/app.js" defer></script>
 </body>

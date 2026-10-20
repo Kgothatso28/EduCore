@@ -368,6 +368,8 @@ public sealed class TenantIsolationTests : IDisposable
         db.PlatformLoginEvents.Add(new PlatformLoginEvent(
             "north-admin", true, "success"));
         db.PlatformLoginEvents.Add(new PlatformLoginEvent(
+            "north-admin", true, "logout"));
+        db.PlatformLoginEvents.Add(new PlatformLoginEvent(
             "unknown-user", false, "invalid_credentials"));
         await db.SaveChangesAsync();
 
@@ -389,6 +391,8 @@ public sealed class TenantIsolationTests : IDisposable
         Assert.NotNull(details);
         Assert.Contains(details.MembershipCounts, item =>
             item.Role == SchoolRole.SchoolAdministrator && item.Active == 1);
+        Assert.Contains(details.Administrators, item =>
+            item.SubjectId == UserId && item.IsActive);
 
         var users = await administration.GetUsersAsync("user-1", 1, 20, default);
         Assert.Single(users.Items);
@@ -404,6 +408,46 @@ public sealed class TenantIsolationTests : IDisposable
             "unknown-user", null, null, 1, 20, default);
         Assert.Single(logins.Items);
         Assert.Equal("invalid_credentials", logins.Items[0].Outcome);
+    }
+
+    /// <summary>Creates and audits a school role while preserving backend membership enforcement.</summary>
+    [Fact]
+    public async Task Platform_membership_assignment_is_audited_and_revocation_blocks_access()
+    {
+        using var db = CreateDbContext(new TenantContext());
+        var service = new PlatformAdministrationService(db);
+
+        var created = await service.CreateMembershipAsync(
+            "platform-root", _schoolA, "new-teacher", SchoolRole.Teacher, default);
+        Assert.Equal(
+            PlatformAdministrationService.MembershipCreateStatus.Created,
+            created.Status);
+        Assert.NotNull(created.MembershipId);
+        Assert.Equal(
+            PlatformAdministrationService.MembershipCreateStatus.AlreadyExists,
+            (await service.CreateMembershipAsync(
+                "platform-root", _schoolA, "new-teacher", SchoolRole.Teacher, default)).Status);
+        Assert.Equal(
+            PlatformAdministrationService.MembershipCreateStatus.SelfAssignment,
+            (await service.CreateMembershipAsync(
+                "platform-root", _schoolA, "platform-root", SchoolRole.SchoolAdministrator, default)).Status);
+
+        var membership = await service.GetMembershipAsync(created.MembershipId!.Value, default);
+        Assert.NotNull(membership);
+        Assert.Equal("new-teacher", membership.SubjectId);
+        Assert.Equal(SchoolRole.Teacher, membership.Role);
+        Assert.True(await service.UpdateMembershipAsync(
+            "platform-root", membership.Id, SchoolRole.Teacher, false, default));
+
+        using var verificationDb = CreateDbContext(new TenantContext());
+        var resolver = new SchoolContextResolver(verificationDb, new TenantContext());
+        Assert.False(await resolver.TryEstablishAsync(Principal(_schoolA, "new-teacher")));
+        Assert.Contains((await service.GetAuditEventsAsync(
+            "membership.", null, null, 1, 20, default)).Items, item =>
+            item.Action == "membership.created");
+        Assert.Contains((await service.GetAuditEventsAsync(
+            "membership.", null, null, 1, 20, default)).Items, item =>
+            item.Action == "membership.changed");
     }
 
     /// <summary>Requires explicit database grants and never infers sensitive school-data access.</summary>
@@ -437,6 +481,19 @@ public sealed class TenantIsolationTests : IDisposable
             [rolesManageRequirement], user, resource: null);
         await handler.HandleAsync(rolesContext);
         Assert.False(rolesContext.HasSucceeded);
+
+        var identityManageRequirement = new PlatformPermissionRequirement(
+            EduCore.Api.Security.PlatformPermissions.IdentityManage);
+        var identityContext = new AuthorizationHandlerContext(
+            [identityManageRequirement], user, resource: null);
+        await handler.HandleAsync(identityContext);
+        Assert.False(identityContext.HasSucceeded);
+        Assert.DoesNotContain(
+            EduCore.Api.Security.PlatformPermissions.IdentityManage,
+            EduCore.Api.Security.PlatformPermissions.Delegable);
+        Assert.Contains(
+            EduCore.Api.Security.PlatformPermissions.IdentityManage,
+            EduCore.Api.Security.PlatformPermissions.Bootstrap);
     }
 
     /// <summary>Prevents ordinary grants from escalating, self-assigning, or enabling school-data access.</summary>
@@ -457,6 +514,9 @@ public sealed class TenantIsolationTests : IDisposable
             EduCore.Api.Security.PlatformPermissions.RolesManage, default));
         Assert.False(await service.GrantPermissionAsync(
             "platform-root", UserId, "schooldata.academic.view", default));
+        Assert.False(await service.GrantPermissionAsync(
+            "platform-root", UserId,
+            EduCore.Api.Security.PlatformPermissions.IdentityManage, default));
         Assert.True(await service.GrantPermissionAsync(
             "platform-root", UserId,
             EduCore.Api.Security.PlatformPermissions.SchoolsView, default));
@@ -489,6 +549,32 @@ public sealed class TenantIsolationTests : IDisposable
             item.Permission.StartsWith("schooldata.", StringComparison.Ordinal));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             bootstrapper.ProvisionFirstAdministratorAsync(default));
+    }
+
+    /// <summary>Only an existing platform security administrator can receive the new identity capability.</summary>
+    [Fact]
+    public async Task Identity_management_capability_upgrade_requires_existing_security_admin()
+    {
+        using var db = CreateDbContext(new TenantContext());
+        db.PlatformAdministratorGrants.Add(new PlatformAdministratorGrant(
+            "platform-root", EduCore.Api.Security.PlatformPermissions.RolesManage));
+        await db.SaveChangesAsync();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PlatformAdmin:BootstrapSubjectId"] = "platform-root"
+            })
+            .Build();
+        var bootstrapper = new PlatformAdminBootstrapper(db, configuration);
+
+        await bootstrapper.ProvisionIdentityManagementCapabilityAsync(default);
+        Assert.True(await db.PlatformAdministratorGrants.AnyAsync(item =>
+            item.SubjectId == "platform-root" &&
+            item.Permission == EduCore.Api.Security.PlatformPermissions.IdentityManage));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            bootstrapper.ProvisionIdentityManagementCapabilityAsync(default));
+        Assert.Single(await db.PlatformAuditEvents.Where(item =>
+            item.Action == "platform.identity.manage.provisioned").ToListAsync());
     }
 
     /// <summary>Audits school creation and status changes while refusing changes to archived schools.</summary>

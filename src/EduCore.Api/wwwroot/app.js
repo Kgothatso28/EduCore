@@ -4,6 +4,87 @@ let currentPage = 1;
 const pageSize = 10;
 let activeSchoolId;
 
+function setupNavigationDrawer(toggleId, sidebarId, backdropId) {
+  const toggle = document.querySelector(`#${toggleId}`);
+  const sidebar = document.querySelector(`#${sidebarId}`);
+  const backdrop = document.querySelector(`#${backdropId}`);
+  const main = document.querySelector("main");
+  const headerActions = document.querySelector(".top-actions");
+  const brand = document.querySelector(".brand");
+  if (!toggle || !sidebar || !backdrop) return;
+
+  const mobile = window.matchMedia("(max-width: 880px)");
+  const setOpen = (open, restoreFocus = false) => {
+    const isOpen = open && mobile.matches;
+    toggle.setAttribute("aria-expanded", String(isOpen));
+    toggle.setAttribute("aria-label", isOpen ? "Close navigation" : "Open navigation");
+    sidebar.inert = mobile.matches && !isOpen;
+    if (main) main.inert = isOpen;
+    if (headerActions) headerActions.inert = isOpen;
+    if (brand) brand.inert = isOpen;
+    backdrop.hidden = !isOpen;
+    backdrop.tabIndex = -1;
+    document.body.classList.toggle("nav-open", isOpen);
+    if (isOpen) sidebar.querySelector("a")?.focus();
+    else if (restoreFocus) toggle.focus();
+  };
+
+  toggle.addEventListener("click", () =>
+    setOpen(toggle.getAttribute("aria-expanded") !== "true"));
+  backdrop.addEventListener("click", () => setOpen(false, true));
+  sidebar.addEventListener("click", event => {
+    const link = event.target.closest("a");
+    if (!link || !mobile.matches) return;
+    setOpen(false, true);
+    if (link.hash) {
+      const target = document.querySelector(link.hash);
+      if (target) {
+        target.tabIndex = -1;
+        requestAnimationFrame(() => target.focus({ preventScroll: true }));
+      }
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Tab" && toggle.getAttribute("aria-expanded") === "true") {
+      const items = [toggle, ...sidebar.querySelectorAll("a[href]:not([hidden])")];
+      const index = items.indexOf(document.activeElement);
+      if (event.shiftKey && index === 0) {
+        event.preventDefault();
+        items.at(-1).focus();
+      } else if (!event.shiftKey && index === items.length - 1) {
+        event.preventDefault();
+        items[0].focus();
+      }
+    }
+    if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+      setOpen(false, true);
+    }
+  });
+  mobile.addEventListener("change", () => setOpen(false));
+  setOpen(false);
+}
+
+function updateWorkspaceNavigation(role) {
+  for (const link of document.querySelectorAll("[data-nav-role]")) {
+    link.hidden = link.dataset.navRole !== role;
+  }
+  updateCurrentNavigation();
+}
+
+function updateCurrentNavigation() {
+  const activeHash = location.hash || "#school-title";
+  for (const link of document.querySelectorAll("[data-nav-link]")) {
+    if (link.getAttribute("href") === activeHash) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
+}
+
+setupNavigationDrawer("menu-toggle", "app-sidebar", "nav-backdrop");
+window.addEventListener("hashchange", updateCurrentNavigation);
+
 // Centralize same-origin API calls, CSRF headers, authentication redirects, and error conversion.
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -31,6 +112,14 @@ async function refreshCsrf() {
 
 const loginForm = document.querySelector("#login-form");
 if (loginForm) {
+  document.querySelector("#toggle-password").addEventListener("click", event => {
+    const password = document.querySelector("#password");
+    const visible = password.type === "password";
+    password.type = visible ? "text" : "password";
+    event.currentTarget.textContent = visible ? "Hide" : "Show";
+    event.currentTarget.setAttribute("aria-pressed", String(visible));
+  });
+
   // Authenticate submitted credentials, then send the signed-in user to the school dashboard.
   loginForm.addEventListener("submit", async event => {
     event.preventDefault();
@@ -93,6 +182,15 @@ async function loadStudents() {
     buttons.append(edit, remove);
     actions.append(buttons);
     row.append(idCell, nameCell, actions);
+    rows.append(row);
+  }
+  if (!result.items.length) {
+    const row = document.createElement("tr");
+    const empty = document.createElement("td");
+    empty.className = "empty-row";
+    empty.colSpan = 3;
+    empty.textContent = search ? "No students match this search." : "No student records yet.";
+    row.append(empty);
     rows.append(row);
   }
   document.querySelector("#student-count").textContent = `${result.totalCount} students`;
@@ -419,10 +517,12 @@ if (studentForm) {
       if (activeSchoolId || schools.length > 1) {
         const session = await api("/api/v1/session");
         activeSchoolId = session.schoolId;
+        selector.value = activeSchoolId || "";
         document.querySelector("#school-title").textContent = session.schoolName || "Your school";
         document.querySelector("#current-user").textContent = `${session.userName} · ${session.role}`;
         document.querySelector("#role-label").textContent =
           session.role === "SchoolAdministrator" ? "PRINCIPAL" : session.role.toUpperCase();
+        updateWorkspaceNavigation(session.role);
         const description = document.querySelector("#dashboard-description");
         const principal = session.role === "SchoolAdministrator";
         const teacher = session.role === "Teacher";
@@ -479,7 +579,11 @@ if (studentForm) {
           const cards = document.querySelector("#teacher-classes");
           cards.replaceChildren();
           if (!dashboard.classes.length) {
-            cards.textContent = "No classes are assigned to your account yet.";
+            const empty = document.createElement("p");
+            empty.className = "empty-state-note";
+            empty.setAttribute("role", "status");
+            empty.textContent = "No classes are assigned to your account yet.";
+            cards.append(empty);
           }
           for (const schoolClass of dashboard.classes) {
             const card = document.createElement("article");
@@ -554,6 +658,9 @@ if (studentForm) {
       firstName: document.querySelector("#first-name").value,
       lastName: document.querySelector("#last-name").value
     });
+    const saveButton = document.querySelector("#save-student");
+    saveButton.disabled = true;
+    saveButton.textContent = "Saving…";
     try {
       await api(id ? `/api/v1/students/${id}` : "/api/v1/students", {
         method: id ? "PUT" : "POST", body
@@ -562,6 +669,10 @@ if (studentForm) {
       await refreshPrincipalData();
     } catch (error) {
       showFormMessage(error.message);
+    } finally {
+      saveButton.disabled = false;
+      saveButton.textContent = document.querySelector("#student-id").value ?
+        "Save changes" : "Add student";
     }
   });
 

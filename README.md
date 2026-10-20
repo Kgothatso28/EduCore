@@ -11,10 +11,11 @@ EDUCORE is being built as a multi-school school-management platform. This is the
 - Default EF Core tenant query filtering, tenant-write guards, scoped student identifiers, and school-administrator policy enforcement.
 - Role-protected principal, teacher, and student dashboards. Teachers can see only assigned class rosters, and students can see only the student profile linked to their authenticated identity.
 - Principal analytics include SQL-aggregated monthly student-record creation counts (filterable by calendar year) and student distribution by class. Teacher analytics include student counts across only assigned classes. Charts use accessible native HTML/SVG; no chart package is required.
+- The static HTML/CSS/JavaScript interface uses a shared responsive shell, role-aware school navigation, accessible mobile drawers, and consistent sign-in, dashboard, table, and empty-state styling without additional frontend dependencies.
 - A separate database-backed platform-permission layer for school registry, existing identity/membership metadata, delegated platform capabilities, administrative audits, and EduCore-managed demo login history.
 - SQL Server migration and negative/positive tenant-isolation tests against uniquely named SQL Server LocalDB databases.
 
-Enrollment charts group currently retained `Students.CreatedUtc` records; they cannot recover deleted records or historical month-end enrollment. Attendance, assessment/grade data, fees/finance, timetables, announcements, course materials, and parent dashboards are not implemented, so their analytics are explicitly unavailable instead of using invented data. The platform directory is derived from existing school memberships and platform grants; it is not an identity-provider user directory. Account creation/deactivation, administrator password resets/lost-password recovery, MFA, global session revocation, and external-provider login history need a configured identity-provider management/recovery integration and are intentionally unavailable. The Development-only demo account can change its own password after verifying the current password; the current cookie is signed out, while no server-side session store exists to revoke other copied cookies. Platform pages and APIs do not query student records. Do not issue arbitrary `active_school_id` claims: the configured trusted identity provider must only issue/switch that claim after validating membership. A school-provisioning endpoint is available to explicitly authorized platform administrators; school memberships still require a known trusted subject.
+Enrollment charts group currently retained `Students.CreatedUtc` records; they cannot recover deleted records or historical month-end enrollment. Attendance, assessment/grade data, fees/finance, timetables, announcements, course materials, and parent dashboards are not implemented, so their analytics are explicitly unavailable instead of using invented data. The platform directory is derived from known memberships and platform grants; it is not a complete identity-provider directory. Account creation/deactivation and provider-wide login history remain identity-provider responsibilities. Keycloak password-recovery email, TOTP-enrollment email, and session/refresh-token revocation endpoints are implemented but unavailable until the integration below is configured and tested. Offline-validated access JWTs may remain valid until expiry after Keycloak logout. The Development-only demo password change signs out its current cookie but cannot revoke copied cookies. Platform pages and APIs do not query student records. Do not issue arbitrary `active_school_id` claims: the trusted identity provider must only issue/switch that claim after validating membership. Authorized platform administrators can provision a school membership for an exact issuer subject; this does not create or verify the external account.
 
 ## Architecture and security documents
 
@@ -81,11 +82,42 @@ $env:PlatformAdmin__BootstrapSubjectId = "exact-subject-from-the-trusted-issuer"
 dotnet run --project src\EduCore.Api\EduCore.Api.csproj -- --provision-platform-admin
 ```
 
-Configure the trusted issuer, audience, and SQL connection first. The command applies pending migrations and refuses to run if a platform role manager is already provisioned. Protect execution and configuration as privileged deployment operations. The API can delegate only the allowlisted lower-risk platform capabilities; `platform.roles.manage` cannot be delegated through the API, self-grants are rejected, and all grants/revocations are audited.
+Configure the trusted issuer, audience, and SQL connection first. The command applies pending migrations and refuses to run if a platform role manager is already provisioned. Protect execution and configuration as privileged deployment operations. The API can delegate only allowlisted lower-risk platform capabilities; `platform.roles.manage` and `platform.identity.manage` are bootstrap-only, self-grants are rejected, and all grants/revocations are audited.
 
-Available platform APIs are rooted at `/api/v1/platform`: `/dashboard`, `/schools`, `/users`, `/memberships/{id}`, `/permissions`, `/login-history`, and `/audit-events`. School suspension preserves data and membership rows while the existing tenant middleware prevents normal school operations. Audit/login history is paginated; application writes reject audit/history edits and deletes. Database operator credentials must also restrict direct table mutation and retention, since application-level append-only checks are not tamper-proof against a database owner.
+On an existing deployment that already has a `platform.roles.manage` grant, explicitly upgrade the selected existing security administrator once. This does not restore or alter any other grant:
 
-Authentication history records only outcomes for the Development cookie login managed by EduCore. It omits IP and user-agent data, passwords, hashes, reset tokens, and session secrets. JWT login events occur at the external identity provider and are not represented as EduCore logins.
+```powershell
+$env:PlatformAdmin__BootstrapSubjectId = "exact-existing-security-admin-subject"
+dotnet run --project src\EduCore.Api\EduCore.Api.csproj -- --provision-platform-identity-management
+```
+
+Available platform APIs are rooted at `/api/v1/platform`: `/dashboard`, `/schools`, `/users`, `/memberships/{id}`, `/permissions`, `/login-history`, and `/audit-events`. `POST /schools/{schoolId}/memberships` assigns a school-local role; `PUT /memberships/{id}` changes or deactivates it. School suspension preserves data and memberships while backend tenant validation blocks normal school operations. Audit/login history is searchable, date-filterable, paginated, UTC timestamped, and append-only through the application. Database operator credentials must also restrict direct table mutation and retention; application checks cannot prevent a database owner from tampering.
+
+Authentication history records successful and failed Development cookie logins and observable demo logout events. It omits IP and user-agent data, passwords, hashes, reset tokens, and session secrets. JWT login events occur at the external identity provider and are not represented as EduCore logins.
+
+### Keycloak identity-management integration
+
+The following protected operations use Keycloak's Admin REST API:
+
+- `POST /api/v1/platform/users/{subjectId}/password-recovery` sends Keycloak's `UPDATE_PASSWORD` action email.
+- `POST /api/v1/platform/users/{subjectId}/mfa-enrollment` sends its `CONFIGURE_TOTP` action email.
+- `POST /api/v1/platform/users/{subjectId}/sessions/revoke` logs out the Keycloak user and revokes their Keycloak session/refresh tokens.
+
+All require the non-delegable `platform.identity.manage` capability, installed only by the explicit first-admin bootstrap; requests are rate-limited to five per 15 minutes per actor and client IP. Keycloak action links default to a 15-minute lifespan; configure a value from 300 to 3600 seconds. EduCore never receives or stores passwords or action tokens. An operator's self-recovery uses Keycloak's hosted login **Forgot password** flow, not an unauthenticated EduCore reset endpoint.
+
+Configure these values through a secret store or environment variables (never commit the client secret):
+
+```powershell
+$env:IdentityManagement__Keycloak__BaseUrl = "https://keycloak.example.com"
+$env:IdentityManagement__Keycloak__Realm = "educore"
+$env:IdentityManagement__Keycloak__ClientId = "educore-api-admin"
+$env:IdentityManagement__Keycloak__ClientSecret = "from-secret-store"
+$env:IdentityManagement__Keycloak__ActionLinkLifespanSeconds = "900"
+```
+
+The base URL is the Keycloak server origin, without `/realms/...`; it must use HTTPS. Configure a confidential service-account client with client-credentials enabled and the minimum realm-management user-management permission needed for these endpoints (do not grant `realm-admin`). Restrict that service account to the EduCore realm. Ensure the trusted issuer is the same realm, the `sub` claim is the Keycloak internal user ID used by Admin REST, and SQL has the provisioned `platform.identity.manage` grant. For email recovery, configure Keycloak SMTP, verified/usable user email addresses, the realm **Forgot password** flow, and a strong realm password policy. For MFA, configure the realm OTP policy and authentication flow to require OTP after enrollment; the API email only initiates TOTP setup. Test both flows end-to-end in a non-production realm before enabling.
+
+Keycloak logout revokes server-side sessions and refresh tokens. Since the API validates JWTs locally, an already-issued access token can remain accepted until its expiry; short access-token lifetimes or online token revocation/introspection are required if immediate access-token invalidation is a requirement. Keycloak integration tests use a local fake HTTP handler only; no Keycloak instance, SMTP delivery, MFA enrollment, or end-to-end recovery has been verified.
 
 ### Trusted JWT deployment configuration
 
@@ -117,4 +149,4 @@ SQL Server Row-Level Security is not enabled in this increment; it is not a subs
 
 ## Production and assurance status
 
-This project has not undergone a full security review, penetration test, external identity-provider integration, operational readiness review, or compliance audit. SOC 2 alignment and any certification are not claimed. Review the security test report for uncovered acceptance scenarios before treating any deployment as safe.
+This project has not undergone a full security review, penetration test, live Keycloak integration, operational readiness review, or compliance audit. SOC 2 alignment and any certification are not claimed. Review the security test report for uncovered acceptance scenarios before treating any deployment as safe.

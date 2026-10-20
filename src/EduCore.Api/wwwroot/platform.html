@@ -7,19 +7,38 @@
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="topbar">
-    <a class="brand" href="/">EduCore</a>
-    <nav class="platform-nav" aria-label="Platform administration">
-      <a href="#overview">Overview</a>
-      <a href="#schools">Schools</a>
-      <a href="#users">Users and memberships</a>
-      <a href="#permissions">Platform permissions</a>
-      <a href="#login-history">Login history</a>
-      <a href="#audit-events">Audit events</a>
-    </nav>
-    <button id="platform-logout" class="button-secondary" type="button">Sign out</button>
+    <div class="topbar-leading">
+      <button id="platform-menu-toggle" class="menu-toggle button-secondary" type="button"
+        aria-controls="platform-sidebar" aria-expanded="false" aria-label="Open navigation">
+        <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>Menu</span>
+      </button>
+      <a class="brand" href="/" aria-label="EduCore home">
+        <span class="brand-mark" aria-hidden="true">E</span><span>EduCore</span>
+      </a>
+    </div>
+    <div class="top-actions platform-actions">
+      <span class="topbar-context">Platform operations</span>
+      <button id="platform-logout" class="button-secondary" type="button">Sign out</button>
+    </div>
   </header>
-  <main class="container platform-container">
+  <button id="platform-nav-backdrop" class="nav-backdrop" type="button" aria-label="Close navigation" hidden></button>
+  <div class="app-shell platform-shell">
+    <aside id="platform-sidebar" class="sidebar platform-sidebar" aria-label="Platform administration navigation" inert>
+      <p class="sidebar-caption">PLATFORM OPERATIONS</p>
+      <nav class="sidebar-nav">
+        <a href="#overview" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Overview</a>
+        <a href="#schools" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Schools</a>
+        <a href="#users" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Users &amp; memberships</a>
+        <a href="#permissions" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Permissions</a>
+        <a href="#login-history" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Login history</a>
+        <a href="#audit-events" data-nav-link><span class="nav-marker" aria-hidden="true"></span>Audit events</a>
+      </nav>
+      <div class="sidebar-footnote"><span class="secure-dot" aria-hidden="true"></span>School data stays protected</div>
+    </aside>
+  <main id="main-content" class="container platform-container platform-content" tabindex="-1">
     <section class="welcome" id="overview">
       <p class="eyebrow">PLATFORM OPERATIONS</p>
       <h1>Super Admin</h1>
@@ -43,7 +62,17 @@
     <section class="panel privacy-notice" aria-label="Account and privacy boundaries">
       <h2>Identity and school-data boundaries</h2>
       <p>School registry, memberships, platform permissions, and aggregate platform activity are available here. Student profiles, marks, attendance, and financial records are not queried or exposed.</p>
-      <p id="identity-limits">A current-password change is available for this local demo account. Account creation/deactivation, administrator password resets, lost-password recovery, MFA, and external-provider login history require a configured identity-provider management and recovery integration and are not enabled here.</p>
+      <p id="identity-limits">A current-password change is available for this local demo account. External account creation, deactivation, recovery, MFA and login history are managed by the configured identity provider.</p>
+      <form id="identity-action-form" class="platform-inline-form">
+        <h3>Keycloak account security (Super Admin only)</h3>
+        <p class="muted">Actions require Keycloak configuration and a Keycloak user ID matching the trusted subject ID. Password recovery and TOTP setup complete through Keycloak's short-lived email action.</p>
+        <div><label for="identity-subject-id">Keycloak subject ID</label><input id="identity-subject-id" maxlength="200" required></div>
+        <div class="identity-action-buttons">
+          <button id="identity-recovery" type="button">Send password recovery</button>
+          <button id="identity-mfa" class="button-secondary" type="button">Require TOTP setup</button>
+          <button id="identity-revoke" class="button-secondary" type="button">Revoke sessions</button>
+        </div>
+      </form>
       <form id="self-password-form" class="platform-inline-form">
         <h3>Change this local demo password</h3>
         <div><label for="current-password">Current password</label><input id="current-password" type="password" autocomplete="current-password" required></div>
@@ -110,6 +139,23 @@
         <span id="users-page"></span>
         <button id="users-next" class="button-secondary" type="button">Next</button>
       </div>
+      <form id="membership-create-form" class="platform-inline-form">
+        <h3>Assign a school role</h3>
+        <p class="muted">Use the exact subject ID issued by the trusted identity provider. EduCore cannot verify external account existence.</p>
+        <div><label for="membership-school-id">School ID (shown in school details)</label><input id="membership-school-id" maxlength="36" required></div>
+        <div><label for="membership-subject-id">Identity-provider subject ID</label><input id="membership-subject-id" maxlength="200" required></div>
+        <div>
+          <label for="membership-role">School role</label>
+          <select id="membership-role" required>
+            <option value="SchoolAdministrator">School administrator</option>
+            <option value="Teacher">Teacher</option>
+            <option value="Staff">Staff</option>
+            <option value="Student">Student</option>
+            <option value="Guardian">Guardian</option>
+          </select>
+        </div>
+        <button type="submit">Assign role</button>
+      </form>
     </section>
 
     <section id="permissions" class="panel platform-section">
@@ -145,6 +191,8 @@
         <form id="login-search" class="search-form">
           <label class="sr-only" for="login-search-term">Search login history</label>
           <input id="login-search-term" type="search" maxlength="200" placeholder="Search login identifier or outcome">
+          <label for="login-from">From (local time)</label><input id="login-from" type="datetime-local">
+          <label for="login-to">To (local time)</label><input id="login-to" type="datetime-local">
           <button class="button-secondary" type="submit">Search</button>
         </form>
       </div>
@@ -165,6 +213,8 @@
         <form id="audit-search" class="search-form">
           <label class="sr-only" for="audit-search-term">Search audit events</label>
           <input id="audit-search-term" type="search" maxlength="200" placeholder="Search actor, action, or target">
+          <label for="audit-from">From (local time)</label><input id="audit-from" type="datetime-local">
+          <label for="audit-to">To (local time)</label><input id="audit-to" type="datetime-local">
           <button class="button-secondary" type="submit">Search</button>
         </form>
       </div>
@@ -178,6 +228,7 @@
       </div>
     </section>
   </main>
+  </div>
   <script src="/platform.js" defer></script>
 </body>
 </html>
