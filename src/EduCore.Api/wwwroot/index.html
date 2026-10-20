@@ -11,6 +11,7 @@
   <header class="topbar">
     <a class="brand" href="/">EduCore</a>
     <div class="top-actions">
+      <a class="button-secondary" href="/platform.html">Platform administration</a>
       <label class="sr-only" for="school-select">Active school</label>
       <select id="school-select" aria-label="Active school"></select>
       <span id="current-user" class="muted"></span>
@@ -18,14 +19,129 @@
     </div>
   </header>
   <main class="container">
-    <!-- The school title and current user are filled from the validated session endpoint. -->
+    <p id="dashboard-message" class="message" role="status" aria-live="polite"></p>
     <section class="welcome">
-      <p class="eyebrow">SCHOOL OVERVIEW</p>
+      <p id="role-label" class="eyebrow">SCHOOL WORKSPACE</p>
       <h1 id="school-title">Loading school…</h1>
-      <p class="muted">Manage student records for your active school.</p>
+      <p id="dashboard-description" class="muted">Loading your authorized dashboard.</p>
     </section>
-    <!-- Student search, editing, results, and pagination are wired by app.js. -->
-    <section class="panel">
+
+    <section id="principal-dashboard" class="dashboard-grid" hidden aria-label="School overview">
+      <article class="stat-card"><span>Current student records</span><strong id="metric-students">—</strong></article>
+      <article class="stat-card"><span>Teachers</span><strong id="metric-teachers">—</strong></article>
+      <article class="stat-card"><span>Classes</span><strong id="metric-classes">—</strong></article>
+      <article class="stat-card"><span>Teaching assignments</span><strong id="metric-assignments">—</strong></article>
+    </section>
+
+    <section id="principal-analytics" class="analytics-grid" hidden aria-label="Principal analytics">
+      <article class="panel chart-panel">
+        <div class="chart-heading">
+          <div><h2>Student enrolment records</h2><p>Current student records by creation month.</p></div>
+          <label for="analytics-year">Calendar year</label>
+          <select id="analytics-year"></select>
+        </div>
+        <p id="enrolment-note" class="chart-note" role="status" aria-live="polite">Loading enrolment data…</p>
+        <div id="enrolment-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="chart-heading"><div><h2>Students by class</h2><p>Current students grouped by assigned class.</p></div></div>
+        <p id="class-count-note" class="chart-note" role="status" aria-live="polite">Loading class data…</p>
+        <div id="class-count-chart"></div>
+      </article>
+      <article class="panel unavailable-panel">
+        <h2>Attendance overview</h2>
+        <p role="status">Unavailable: EduCore has no attendance records or attendance module.</p>
+      </article>
+      <article class="panel unavailable-panel">
+        <h2>Academic performance</h2>
+        <p role="status">Unavailable: there are no assessments, marks, or grading records to aggregate.</p>
+      </article>
+      <article class="panel unavailable-panel">
+        <h2>Financial overview</h2>
+        <p role="status">Unavailable: EduCore has no fees or finance module.</p>
+      </article>
+    </section>
+
+    <section id="teacher-dashboard" class="panel" hidden>
+      <div class="section-heading">
+        <div><h2 id="teacher-name">My teaching</h2><p class="muted">Classes and subjects assigned to your account.</p></div>
+      </div>
+      <section id="teacher-metrics" class="dashboard-grid" aria-label="Teaching summary">
+        <article class="stat-card"><span>Assigned classes</span><strong id="teacher-class-count">—</strong></article>
+        <article class="stat-card"><span>Assigned subjects</span><strong id="teacher-subject-count">—</strong></article>
+        <article class="stat-card"><span>Students in assigned classes</span><strong id="teacher-student-count">—</strong></article>
+      </section>
+      <article class="panel chart-panel chart-panel-nested">
+        <h2>Students by assigned class</h2>
+        <p id="teacher-class-note" class="chart-note" role="status" aria-live="polite">Loading class data…</p>
+        <div id="teacher-class-chart"></div>
+      </article>
+      <section class="analytics-grid" aria-label="Teaching analytics">
+        <article class="panel unavailable-panel">
+          <h2>Class attendance</h2>
+          <p role="status">Unavailable: no attendance records are stored.</p>
+        </article>
+        <article class="panel unavailable-panel">
+          <h2>Average marks by subject</h2>
+          <p role="status">Unavailable: no assessment or marks data exists.</p>
+        </article>
+        <article class="panel unavailable-panel">
+          <h2>Grade distribution</h2>
+          <p role="status">Unavailable: no recorded grades or configured grading bands exist.</p>
+        </article>
+        <article class="panel unavailable-panel">
+          <h2>Academic performance trends</h2>
+          <p role="status">Unavailable: there are no dated assessment results to compare.</p>
+        </article>
+      </section>
+      <div id="teacher-classes" class="card-grid"></div>
+      <p id="teacher-message" class="message" role="status" aria-live="polite"></p>
+      <section id="class-roster" class="roster" hidden>
+        <h3 id="roster-title"></h3>
+        <div class="table-wrap">
+          <table><thead><tr><th scope="col">Student ID</th><th scope="col">Name</th></tr></thead><tbody id="roster-students"></tbody></table>
+        </div>
+      </section>
+    </section>
+
+    <section id="student-dashboard" class="panel" hidden>
+      <h2>My student profile</h2>
+      <dl class="profile-grid">
+        <div><dt>Student ID</dt><dd id="profile-id">—</dd></div>
+        <div><dt>Name</dt><dd id="profile-name">—</dd></div>
+        <div><dt>Class</dt><dd id="profile-class">Not assigned</dd></div>
+        <div><dt>Grade</dt><dd id="profile-grade">Not assigned</dd></div>
+      </dl>
+      <h3>My subjects</h3>
+      <ul id="profile-subjects" class="subject-list"></ul>
+      <p id="student-message" class="muted"></p>
+      <section class="analytics-grid student-analytics" aria-label="Student academic analytics">
+        <article class="panel unavailable-panel">
+      <h2>Academic progress by subject</h2>
+      <p role="status">Unavailable: no student marks or assessment records are stored yet.</p>
+        </article>
+        <article class="panel unavailable-panel">
+      <h2>Assessment performance trend</h2>
+      <p role="status">Unavailable: no dated assessment results exist to form a trend.</p>
+        </article>
+        <article class="panel unavailable-panel">
+      <h2>Personal attendance</h2>
+      <p role="status">Unavailable: EduCore has no attendance records.</p>
+        </article>
+        <article class="panel unavailable-panel">
+      <h2>Assessment results summary</h2>
+      <p role="status">Unavailable: no assessment structure or results are implemented.</p>
+        </article>
+      </section>
+    </section>
+
+    <section id="planned-modules" class="panel empty-state" hidden>
+      <h2>More school services</h2>
+      <p id="planned-message" class="muted"></p>
+      <p class="muted">Attendance, timetables, grades, payments, announcements, and learning materials are not yet implemented in this application.</p>
+    </section>
+
+    <section id="student-management" class="panel" hidden>
       <div class="section-heading">
         <div><h2>Students</h2><p id="student-count" class="muted"></p></div>
         <form id="search-form" class="search-form">

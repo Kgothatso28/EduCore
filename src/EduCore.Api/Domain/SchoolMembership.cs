@@ -51,4 +51,10 @@ public sealed class SchoolMembership
 
     /// <summary>Revokes this membership so it can no longer establish tenant context.</summary>
     public void Deactivate() => IsActive = false;
+
+    /// <summary>Restores a previously deactivated membership.</summary>
+    public void Activate() => IsActive = true;
+
+    /// <summary>Changes this identity's school-local role without changing its platform grants.</summary>
+    public void ChangeRole(SchoolRole role) => Role = role;
 }

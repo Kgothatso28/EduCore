@@ -11,6 +11,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -39,6 +43,19 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.platform-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px 16px;
+}
+
+.platform-nav a {
+  color: #165d9c;
+  font-size: .88rem;
+  font-weight: 600;
 }
 
 .container {
@@ -82,6 +99,244 @@ body {
   padding: 24px;
 }
 
+.dashboard-grid,
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
+  gap: 18px;
+  margin: 24px 0;
+}
+
+.stat-card,
+.class-card {
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e3e9f1;
+  border-radius: 12px;
+}
+
+.stat-card span {
+  display: block;
+  color: #63738a;
+  font-size: .9rem;
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #165d9c;
+  font-size: 1.8rem;
+}
+
+.class-card h3 {
+  margin: 0 0 8px;
+}
+
+.class-card p {
+  min-height: 2.8em;
+  color: #63738a;
+}
+
+.roster {
+  margin-top: 28px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.profile-grid div {
+  padding: 16px;
+  background: #f7f9fc;
+  border-radius: 9px;
+}
+
+.profile-grid dt {
+  color: #63738a;
+  font-size: .85rem;
+}
+
+.profile-grid dd {
+  margin: 6px 0 0;
+  font-weight: 650;
+}
+
+.subject-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.subject-list li {
+  padding: 8px 12px;
+  background: #edf3f8;
+  border-radius: 999px;
+}
+
+.empty-state {
+  margin: 24px 0;
+}
+
+.chart-panel {
+  min-width: 0;
+}
+
+.chart-panel h2,
+.unavailable-panel h2 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
+.chart-panel > p,
+.chart-heading p,
+.unavailable-panel p {
+  color: #63738a;
+  font-size: .9rem;
+}
+
+.chart-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.chart-heading h2 {
+  margin: 0;
+}
+
+.chart-heading p {
+  margin: 5px 0 0;
+}
+
+.chart-heading label {
+  min-width: 120px;
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.chart-note {
+  min-height: 1.25em;
+  margin: 0 0 10px;
+  color: #63738a;
+  font-size: .86rem;
+}
+
+.chart-note:empty {
+  display: none;
+}
+
+.chart-figure {
+  margin: 0;
+}
+
+.chart-figure figcaption {
+  margin: 0 0 10px;
+  color: #63738a;
+  font-size: .86rem;
+}
+
+.bar-chart {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 145px) minmax(0, 1fr) 3.25rem;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-label {
+  overflow-wrap: anywhere;
+  font-size: .86rem;
+}
+
+.bar-track {
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: #176bad;
+}
+
+.bar-value {
+  text-align: right;
+  font-size: .85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.line-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.line-grid {
+  stroke: #dce5ee;
+  stroke-width: 1;
+}
+
+.line-axis-label {
+  fill: #63738a;
+  font-size: 12px;
+}
+
+.line-series {
+  fill: none;
+  stroke: #176bad;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.line-point {
+  fill: #fff;
+  stroke: #176bad;
+  stroke-width: 3;
+}
+
+.unavailable-panel {
+  border-left: 4px solid #9aa9b8;
+}
+
+.unavailable-panel p {
+  margin-bottom: 0;
+}
+
+.chart-panel-nested {
+  margin-bottom: 24px;
+}
+
+.student-analytics {
+  margin-top: 28px;
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;
@@ -102,8 +357,119 @@ body {
 /* Search and student form controls share input and focus treatment. */
 .search-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  max-width: 360px;
+  max-width: 640px;
+}
+
+.platform-container {
+  max-width: 1320px;
+}
+
+.platform-section {
+  margin: 24px 0;
+  scroll-margin-top: 20px;
+}
+
+.platform-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+}
+
+.privacy-notice {
+  border-left: 4px solid #2674af;
+}
+
+.privacy-notice h2 {
+  margin-top: 0;
+}
+
+.privacy-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.platform-inline-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  align-items: end;
+  gap: 12px;
+  margin: 16px 0 22px;
+  padding: 16px;
+  background: #f7f9fc;
+  border: 1px solid #e3e9f1;
+  border-radius: 10px;
+}
+
+.platform-inline-form h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.platform-inline-form label,
+.membership-editor label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+.platform-section table {
+  min-width: 780px;
+}
+
+.platform-section td,
+.platform-section th {
+  vertical-align: top;
+}
+
+.platform-section td button {
+  margin: 2px;
+}
+
+.platform-section small {
+  display: inline-block;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  color: #63738a;
+}
+
+.membership-editor {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  align-items: end;
+  gap: 8px;
+  min-width: 400px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e7edf3;
+}
+
+.membership-editor input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+}
+
+.membership-editor label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+  white-space: nowrap;
+}
+
+.platform-detail {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e3e9f1;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.error-message {
+  color: #a52626;
+  font-weight: 600;
+}
+
+.error-message:empty {
+  display: none;
 }
 
 .student-form {
@@ -273,6 +639,16 @@ td .row-actions {
     margin: 28px auto;
   }
 
+  .chart-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .chart-heading label {
+    min-width: 0;
+  }
+
   .section-heading {
     align-items: stretch;
     flex-direction: column;
@@ -288,6 +664,12 @@ td .row-actions {
 
   .topbar {
     padding: 0 16px;
+  }
+
+  .platform-nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .top-actions {
@@ -312,6 +694,12 @@ td .row-actions {
     padding: 12px 16px;
   }
 
+  .platform-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
   .top-actions {
     width: 100%;
     justify-content: space-between;
@@ -319,5 +707,19 @@ td .row-actions {
 
   .panel {
     padding: 16px;
+  }
+
+  .membership-editor {
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+  .platform-section .section-heading {
+    gap: 12px;
+  }
+
+  .platform-section .search-form > * {
+    flex: 1 1 100%;
+    max-width: none;
   }
 }

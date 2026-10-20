@@ -30,8 +30,11 @@ public static class DemoAuthenticationEndpoints
             CancellationToken cancellationToken) =>
         {
             if (string.IsNullOrWhiteSpace(request.UserName) ||
-                string.IsNullOrWhiteSpace(request.Password))
+                string.IsNullOrWhiteSpace(request.Password) ||
+                request.UserName.Length > 120)
             {
+                await authentication.RecordLoginEventAsync(
+                    request.UserName, false, "invalid_request", cancellationToken);
                 return Results.BadRequest(new { error = "Username and password are required." });
             }
 
@@ -46,7 +49,37 @@ public static class DemoAuthenticationEndpoints
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 DemoAuthenticationService.CreatePrincipal(credential));
             return Results.Ok(new { userName = credential.UserName });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting("demo-login");
+
+        // Reauthenticate local account holders before changing their own hashed password.
+        endpoints.MapPost("/api/v1/auth/change-password", async (
+            DemoPasswordChangeRequest request,
+            ClaimsPrincipal user,
+            HttpContext context,
+            DemoAuthenticationService authentication,
+            CancellationToken cancellationToken) =>
+        {
+            var subjectId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (subjectId is null ||
+                string.IsNullOrWhiteSpace(request.CurrentPassword) ||
+                string.IsNullOrWhiteSpace(request.NewPassword) ||
+                request.NewPassword.Length < 12)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["password"] = ["The current password and a new password of at least 12 characters are required."]
+                });
+            }
+
+            if (!await authentication.ChangePasswordAsync(
+                    subjectId, request.CurrentPassword, request.NewPassword, cancellationToken))
+            {
+                return Results.BadRequest(new { error = "The current password was not accepted." });
+            }
+
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.NoContent();
+        }).RequireAuthorization();
 
         // List only active schools for which the authenticated subject currently has membership.
         endpoints.MapGet("/api/v1/auth/schools", async (
@@ -123,6 +156,9 @@ public static class DemoAuthenticationEndpoints
     /// <summary>Captures the credentials submitted to the local demo sign-in route.</summary>
     public sealed record DemoLoginRequest(string UserName, string Password);
 
+    /// <summary>Supplies current-password proof and a replacement secret for a local demo identity.</summary>
+    public sealed record DemoPasswordChangeRequest(string? CurrentPassword, string? NewPassword);
+
     /// <summary>Selects a school to be revalidated and stored in the authenticated session.</summary>
     public sealed record DemoSchoolSelection(Guid SchoolId);
 
@@ -146,7 +182,7 @@ public static class DemoAuthenticationEndpoints
             subjectId = user.FindFirstValue(ClaimTypes.NameIdentifier),
             schoolId = school.Id,
             schoolName = school.Name,
-            role = tenantContext.Role
+            role = tenantContext.Role?.ToString()
         });
     }
 }

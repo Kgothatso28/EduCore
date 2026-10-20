@@ -8,6 +8,19 @@ public sealed class PlatformAdministratorGrant
     {
     }
 
+    /// <summary>Creates a platform capability grant for a trusted identity-provider subject.</summary>
+    public PlatformAdministratorGrant(string subjectId, string permission)
+    {
+        if (string.IsNullOrWhiteSpace(subjectId) || string.IsNullOrWhiteSpace(permission))
+        {
+            throw new ArgumentException("A subject and permission are required.");
+        }
+
+        Id = Guid.NewGuid();
+        SubjectId = subjectId;
+        Permission = permission;
+    }
+
     /// <summary>Stable database identity for this grant.</summary>
     public Guid Id { get; private set; }
     /// <summary>Trusted identity subject receiving the platform-level permission.</summary>

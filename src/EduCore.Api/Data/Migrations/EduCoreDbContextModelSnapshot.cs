@@ -11,10 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EduCore.Api.Data.Migrations
 {
     [DbContext(typeof(EduCoreDbContext))]
-    // EF Core-generated snapshot used to compare future migrations with the current model.
     partial class EduCoreDbContextModelSnapshot : ModelSnapshot
     {
-        /// <summary>Build the current database model snapshot for migration tooling.</summary>
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
@@ -86,6 +84,76 @@ namespace EduCore.Api.Data.Migrations
                     b.ToTable("PlatformAdministratorGrants", (string)null);
                 });
 
+            modelBuilder.Entity("EduCore.Api.Domain.PlatformAuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("ActorSubjectId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedUtc");
+
+                    b.HasIndex("Action", "CreatedUtc");
+
+                    b.ToTable("PlatformAuditEvents", (string)null);
+                });
+
+            modelBuilder.Entity("EduCore.Api.Domain.PlatformLoginEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedUtc");
+
+                    b.HasIndex("AccountIdentifier", "CreatedUtc");
+
+                    b.ToTable("PlatformLoginEvents", (string)null);
+                });
+
             modelBuilder.Entity("EduCore.Api.Domain.School", b =>
                 {
                     b.Property<Guid>("Id")
@@ -117,6 +185,32 @@ namespace EduCore.Api.Data.Migrations
                     b.ToTable("Schools", (string)null);
                 });
 
+            modelBuilder.Entity("EduCore.Api.Domain.SchoolClass", b =>
+                {
+                    b.Property<Guid>("SchoolId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("GradeLevel")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("SchoolId", "Id");
+
+                    b.HasIndex("SchoolId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("SchoolClasses", (string)null);
+                });
+
             modelBuilder.Entity("EduCore.Api.Domain.SchoolMembership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -146,6 +240,66 @@ namespace EduCore.Api.Data.Migrations
                     b.ToTable("SchoolMemberships", (string)null);
                 });
 
+            modelBuilder.Entity("EduCore.Api.Domain.Teacher", b =>
+                {
+                    b.Property<Guid>("SchoolId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SubjectId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("SchoolId", "Id");
+
+                    b.HasIndex("SchoolId", "SubjectId")
+                        .IsUnique();
+
+                    b.ToTable("Teachers", (string)null);
+                });
+
+            modelBuilder.Entity("EduCore.Api.Domain.TeachingAssignment", b =>
+                {
+                    b.Property<Guid>("SchoolId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SubjectName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("TeacherId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("SchoolId", "Id");
+
+                    b.HasIndex("SchoolId", "ClassId");
+
+                    b.HasIndex("SchoolId", "TeacherId", "ClassId", "SubjectName")
+                        .IsUnique();
+
+                    b.ToTable("TeachingAssignments", (string)null);
+                });
+
             modelBuilder.Entity("EduCore.Api.Domain.TenantOwnedEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -167,6 +321,9 @@ namespace EduCore.Api.Data.Migrations
                 {
                     b.HasBaseType("EduCore.Api.Domain.TenantOwnedEntity");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -185,11 +342,30 @@ namespace EduCore.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("SubjectId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasIndex("SchoolId", "ClassId");
+
                     b.HasIndex("SchoolId", "LocalId")
                         .IsUnique()
                         .HasFilter("[LocalId] IS NOT NULL");
 
+                    b.HasIndex("SchoolId", "SubjectId")
+                        .IsUnique()
+                        .HasFilter("[SubjectId] IS NOT NULL");
+
                     b.ToTable("Students", (string)null);
+                });
+
+            modelBuilder.Entity("EduCore.Api.Domain.SchoolClass", b =>
+                {
+                    b.HasOne("EduCore.Api.Domain.School", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EduCore.Api.Domain.SchoolMembership", b =>
@@ -201,6 +377,36 @@ namespace EduCore.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EduCore.Api.Domain.Teacher", b =>
+                {
+                    b.HasOne("EduCore.Api.Domain.School", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EduCore.Api.Domain.TeachingAssignment", b =>
+                {
+                    b.HasOne("EduCore.Api.Domain.School", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EduCore.Api.Domain.SchoolClass", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolId", "ClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EduCore.Api.Domain.Teacher", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolId", "TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("EduCore.Api.Domain.TenantOwnedEntity", b =>
                 {
                     b.HasOne("EduCore.Api.Domain.School", null)
@@ -208,6 +414,14 @@ namespace EduCore.Api.Data.Migrations
                         .HasForeignKey("SchoolId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("EduCore.Api.Domain.Student", b =>
+                {
+                    b.HasOne("EduCore.Api.Domain.SchoolClass", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolId", "ClassId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

@@ -25,15 +25,58 @@ public sealed class DemoAuthenticationService(
                 cancellationToken);
         if (credential is null)
         {
+            await RecordLoginEventAsync(userName, false, "invalid_credentials", cancellationToken);
             return null;
         }
 
         var verification = passwordHasher.VerifyHashedPassword(
             credential, credential.PasswordHash, password);
-        return verification is PasswordVerificationResult.Success or
-            PasswordVerificationResult.SuccessRehashNeeded
-            ? credential
-            : null;
+        var succeeded = verification is PasswordVerificationResult.Success or
+            PasswordVerificationResult.SuccessRehashNeeded;
+        await RecordLoginEventAsync(userName, succeeded,
+            succeeded ? "success" : "invalid_credentials", cancellationToken);
+        return succeeded ? credential : null;
+    }
+
+    /// <summary>Records a coarse login result without persisting passwords, tokens, or network data.</summary>
+    public async Task RecordLoginEventAsync(
+        string? accountIdentifier,
+        bool succeeded,
+        string outcome,
+        CancellationToken cancellationToken)
+    {
+        var identifier = string.IsNullOrWhiteSpace(accountIdentifier)
+            ? "(empty)"
+            : accountIdentifier.Trim();
+        dbContext.PlatformLoginEvents.Add(new PlatformLoginEvent(
+            identifier[..Math.Min(identifier.Length, 200)], succeeded, outcome));
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Changes a local demo password only after verifying the current secret.</summary>
+    public async Task<bool> ChangePasswordAsync(
+        string subjectId,
+        string currentPassword,
+        string newPassword,
+        CancellationToken cancellationToken)
+    {
+        var credential = await dbContext.DemoCredentials.SingleOrDefaultAsync(
+            account => account.SubjectId == subjectId && account.IsActive,
+            cancellationToken);
+        if (credential is null ||
+            passwordHasher.VerifyHashedPassword(
+                credential, credential.PasswordHash, currentPassword) ==
+            PasswordVerificationResult.Failed)
+        {
+            return false;
+        }
+
+        credential.SetPasswordHash(passwordHasher.HashPassword(credential, newPassword));
+        dbContext.PlatformAuditEvents.Add(new PlatformAuditEvent(
+            subjectId, "account.password.changed", "identity", subjectId,
+            "The account holder changed their local demo password."));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     /// <summary>Lists active school memberships joined to schools that are themselves active.</summary>

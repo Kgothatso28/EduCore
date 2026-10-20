@@ -9,12 +9,20 @@ public sealed class Student : TenantOwnedEntity
     }
 
     /// <summary>Creates a student whose tenant ownership is fixed at creation time.</summary>
-    public Student(Guid schoolId, string localId, string firstName, string lastName)
+    public Student(
+        Guid schoolId,
+        string localId,
+        string firstName,
+        string lastName,
+        Guid? classId = null,
+        string? subjectId = null)
         : base(schoolId)
     {
         LocalId = localId;
         FirstName = firstName;
         LastName = lastName;
+        ClassId = classId;
+        SubjectId = subjectId;
         CreatedUtc = DateTimeOffset.UtcNow;
     }
 
@@ -24,6 +32,10 @@ public sealed class Student : TenantOwnedEntity
     public string FirstName { get; private set; } = string.Empty;
     /// <summary>Student's family name.</summary>
     public string LastName { get; private set; } = string.Empty;
+    /// <summary>Optional class placement; null means the student is not yet assigned.</summary>
+    public Guid? ClassId { get; private set; }
+    /// <summary>Optional login subject linked to this student record.</summary>
+    public string? SubjectId { get; private set; }
     /// <summary>UTC creation time for this student record.</summary>
     public DateTimeOffset CreatedUtc { get; private set; }
 
@@ -33,5 +45,12 @@ public sealed class Student : TenantOwnedEntity
         LocalId = localId;
         FirstName = firstName;
         LastName = lastName;
+    }
+
+    /// <summary>Links a school-created student record to its student login and class placement.</summary>
+    public void LinkAccount(Guid classId, string subjectId)
+    {
+        ClassId = classId;
+        SubjectId = subjectId;
     }
 }

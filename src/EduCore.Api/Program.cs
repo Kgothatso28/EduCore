@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,19 +102,87 @@ builder.Services.AddAuthorizationBuilder()
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(
             new ActiveSchoolMembershipRequirement(EduCore.Api.Domain.SchoolRole.SchoolAdministrator));
-    });
+    })
+    .AddPolicy("SchoolTeacher", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new ActiveSchoolMembershipRequirement(
+            EduCore.Api.Domain.SchoolRole.Teacher));
+    })
+    .AddPolicy("SchoolStudent", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new ActiveSchoolMembershipRequirement(
+            EduCore.Api.Domain.SchoolRole.Student));
+    })
+    .AddPolicy(PlatformPermissions.DashboardView, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.DashboardView))
+    .AddPolicy(PlatformPermissions.SchoolsView, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.SchoolsView))
+    .AddPolicy(PlatformPermissions.SchoolsManage, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.SchoolsManage))
+    .AddPolicy(PlatformPermissions.UsersView, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.UsersView))
+    .AddPolicy(PlatformPermissions.UsersManage, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.UsersManage))
+    .AddPolicy(PlatformPermissions.RolesView, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.RolesView))
+    .AddPolicy(PlatformPermissions.RolesManage, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.RolesManage))
+    .AddPolicy(PlatformPermissions.AuditView, policy =>
+        RequirePlatformPermission(policy, PlatformPermissions.AuditView));
 builder.Services.AddDbContext<EduCoreDbContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("demo-login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "Too many sign-in attempts. Try again later." },
+            cancellationToken);
+    };
+});
 builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<SchoolContextResolver>();
 builder.Services.AddScoped<StudentService>();
+builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<PlatformAdministrationService>();
+builder.Services.AddScoped<PlatformAdminBootstrapper>();
 builder.Services.AddScoped<ActiveSchoolMembershipHandler>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler>(
     services => services.GetRequiredService<ActiveSchoolMembershipHandler>());
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    PlatformPermissionHandler>();
 
 var app = builder.Build();
 
 // Seeding is an explicit local-only operation and exits before serving requests.
+if (args.Contains("--seed-platform-admin", StringComparer.OrdinalIgnoreCase))
+{
+    if (!demoAuthEnabled)
+    {
+        throw new InvalidOperationException(
+            "Demo platform-admin seeding requires Development and DemoAuth:Enabled=true.");
+    }
+
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<DemoSeeder>()
+        .SeedPlatformAdminAsync(CancellationToken.None);
+    Console.WriteLine("The optional Development-only platform administrator is ready.");
+    return;
+}
+
 if (args.Contains("--seed-demo", StringComparer.OrdinalIgnoreCase))
 {
     if (!demoAuthEnabled)
@@ -128,10 +198,23 @@ if (args.Contains("--seed-demo", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
-// Middleware order is security-sensitive: establish the authenticated principal before
+if (args.Contains("--provision-platform-admin", StringComparer.OrdinalIgnoreCase))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<EduCoreDbContext>();
+    await dbContext.Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<PlatformAdminBootstrapper>()
+        .ProvisionFirstAdministratorAsync(CancellationToken.None);
+    Console.WriteLine("The configured platform administrator was provisioned.");
+    return;
+}
+
+// Middleware order is security-sensitive: select the endpoint and establish identity before
 // resolving its validated school, and authorize endpoints only after that tenant context exists.
 app.UseHttpsRedirection();
+app.UseRouting();
 app.UseAuthentication();
+app.UseRateLimiter();
 if (demoAuthEnabled)
 {
     // Enforce CSRF validation for every cookie-authenticated state-changing request before routes run.
@@ -173,8 +256,19 @@ app.MapGet("/health/ready", async (EduCoreDbContext dbContext, CancellationToken
         : Results.StatusCode(StatusCodes.Status503ServiceUnavailable));
 // Student routes require administrator membership; data access remains tenant-filtered by the DbContext.
 app.MapStudentEndpoints("SchoolAdministrator");
+app.MapDashboardEndpoints();
+app.MapPlatformEndpoints();
 
 app.Run();
+
+/// <summary>Adds one database-backed platform capability to a named authorization policy.</summary>
+static void RequirePlatformPermission(
+    Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder policy,
+    string permission)
+{
+    policy.RequireAuthenticatedUser();
+    policy.AddRequirements(new PlatformPermissionRequirement(permission));
+}
 
 /// <summary>Exposes the top-level entry point to integration-test hosting.</summary>
 public partial class Program

@@ -43,6 +43,17 @@ public sealed class School
     /// <summary>Prevents this school from being selected for validated tenant requests.</summary>
     public void Suspend() => Status = SchoolStatus.Suspended;
 
+    /// <summary>Reactivates a suspended school without changing its data or memberships.</summary>
+    public void Reactivate()
+    {
+        if (Status == SchoolStatus.Archived)
+        {
+            throw new InvalidOperationException("An archived school cannot be reactivated.");
+        }
+
+        Status = SchoolStatus.Active;
+    }
+
     /// <summary>Marks the school archived so it is excluded from active-school resolution.</summary>
     public void Archive() => Status = SchoolStatus.Archived;
 }

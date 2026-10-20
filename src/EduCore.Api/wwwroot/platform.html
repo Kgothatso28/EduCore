@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Platform administration - EduCore</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">EduCore</a>
+    <nav class="platform-nav" aria-label="Platform administration">
+      <a href="#overview">Overview</a>
+      <a href="#schools">Schools</a>
+      <a href="#users">Users and memberships</a>
+      <a href="#permissions">Platform permissions</a>
+      <a href="#login-history">Login history</a>
+      <a href="#audit-events">Audit events</a>
+    </nav>
+    <button id="platform-logout" class="button-secondary" type="button">Sign out</button>
+  </header>
+  <main class="container platform-container">
+    <section class="welcome" id="overview">
+      <p class="eyebrow">PLATFORM OPERATIONS</p>
+      <h1>Super Admin</h1>
+      <p class="muted">Platform administration is separate from school academic data. All API operations require explicit platform capabilities.</p>
+    </section>
+    <p id="platform-message" class="message" role="status" aria-live="polite"></p>
+    <p id="platform-error" class="error-message" role="alert" aria-live="assertive"></p>
+
+    <section class="dashboard-grid platform-metrics" aria-label="Platform metrics">
+      <article class="stat-card"><span>Registered schools</span><strong id="metric-schools">—</strong></article>
+      <article class="stat-card"><span>Active schools</span><strong id="metric-active-schools">—</strong></article>
+      <article class="stat-card"><span>Suspended schools</span><strong id="metric-suspended-schools">—</strong></article>
+      <article class="stat-card"><span>Known identities with memberships</span><strong id="metric-identities">—</strong></article>
+      <article class="stat-card"><span>Identities with active memberships</span><strong id="metric-active-identities">—</strong></article>
+      <article class="stat-card"><span>Database readiness</span><strong id="metric-database">—</strong></article>
+      <article class="stat-card"><span>Successful EduCore logins (24h)</span><strong id="metric-login-success">—</strong></article>
+      <article class="stat-card"><span>Failed EduCore logins (24h)</span><strong id="metric-login-failed">—</strong></article>
+      <article class="stat-card"><span>Admin changes (7 days)</span><strong id="metric-audit">—</strong></article>
+    </section>
+
+    <section class="panel privacy-notice" aria-label="Account and privacy boundaries">
+      <h2>Identity and school-data boundaries</h2>
+      <p>School registry, memberships, platform permissions, and aggregate platform activity are available here. Student profiles, marks, attendance, and financial records are not queried or exposed.</p>
+      <p id="identity-limits">A current-password change is available for this local demo account. Account creation/deactivation, administrator password resets, lost-password recovery, MFA, and external-provider login history require a configured identity-provider management and recovery integration and are not enabled here.</p>
+      <form id="self-password-form" class="platform-inline-form">
+        <h3>Change this local demo password</h3>
+        <div><label for="current-password">Current password</label><input id="current-password" type="password" autocomplete="current-password" required></div>
+        <div><label for="new-password">New password (12+ characters)</label><input id="new-password" type="password" autocomplete="new-password" minlength="12" required></div>
+        <button type="submit">Change password</button>
+      </form>
+    </section>
+
+    <section id="schools" class="panel platform-section">
+      <div class="section-heading">
+        <div><h2>Schools</h2><p id="schools-page-label" class="muted"></p></div>
+        <form id="school-search" class="search-form">
+          <label class="sr-only" for="school-search-term">Search schools</label>
+          <input id="school-search-term" type="search" maxlength="200" placeholder="Search name or identifier">
+          <label class="sr-only" for="school-status-filter">Filter by status</label>
+          <select id="school-status-filter">
+            <option value="">All statuses</option><option>Active</option><option>Suspended</option><option>Archived</option>
+          </select>
+          <label class="sr-only" for="school-sort">Sort schools</label>
+          <select id="school-sort">
+            <option value="name">Name</option><option value="created">Registration date</option><option value="status">Status</option>
+          </select>
+          <button class="button-secondary" type="submit">Search</button>
+        </form>
+      </div>
+      <form id="school-create-form" class="platform-inline-form">
+        <h3>Register a school</h3>
+        <div><label for="new-school-name">School name</label><input id="new-school-name" name="name" maxlength="200" required></div>
+        <div><label for="new-school-slug">Unique identifier</label><input id="new-school-slug" name="slug" maxlength="80" pattern="[A-Za-z0-9-]+" required></div>
+        <button type="submit">Register school</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">School</th><th scope="col">Identifier</th><th scope="col">Status</th><th scope="col">Registered (UTC)</th><th scope="col">Memberships</th><th scope="col">Actions</th></tr></thead>
+          <tbody id="schools-table"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button id="schools-previous" class="button-secondary" type="button">Previous</button>
+        <span id="schools-page"></span>
+        <button id="schools-next" class="button-secondary" type="button">Next</button>
+      </div>
+      <div id="school-details" class="platform-detail" hidden></div>
+    </section>
+
+    <section id="users" class="panel platform-section">
+      <div class="section-heading">
+        <div><h2>Known identities and memberships</h2><p id="users-page-label" class="muted"></p></div>
+        <form id="user-search" class="search-form">
+          <label class="sr-only" for="user-search-term">Search identities</label>
+          <input id="user-search-term" type="search" maxlength="200" placeholder="Search login identifier">
+          <button class="button-secondary" type="submit">Search</button>
+        </form>
+      </div>
+      <p class="muted">External account status is managed by the identity provider. This directory exposes school memberships and never reads academic records.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Identity</th><th scope="col">Account authority</th><th scope="col">School memberships</th><th scope="col">Delegable platform permissions</th></tr></thead>
+          <tbody id="users-table"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button id="users-previous" class="button-secondary" type="button">Previous</button>
+        <span id="users-page"></span>
+        <button id="users-next" class="button-secondary" type="button">Next</button>
+      </div>
+    </section>
+
+    <section id="permissions" class="panel platform-section">
+      <h2>Platform permissions</h2>
+      <p class="muted">Self-grants and delegation of platform security administration are prohibited. School-data access permissions are not available here.</p>
+      <form id="grant-form" class="platform-inline-form">
+        <div><label for="grant-subject">Existing identity-provider subject ID</label><input id="grant-subject" maxlength="200" required></div>
+        <div>
+          <label for="grant-permission">Delegable capability</label>
+          <select id="grant-permission" required>
+            <option value="platform.dashboard.view">View platform overview</option>
+            <option value="platform.schools.view">View schools</option>
+            <option value="platform.schools.manage">Manage school registry/status</option>
+            <option value="platform.users.view">View identities and memberships</option>
+            <option value="platform.users.manage">Manage school memberships</option>
+            <option value="platform.roles.view">View platform permissions</option>
+            <option value="platform.audit.view">View login and audit history</option>
+          </select>
+        </div>
+        <button type="submit">Grant permission</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Subject ID</th><th scope="col">Capability</th><th scope="col">Action</th></tr></thead>
+          <tbody id="permissions-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="login-history" class="panel platform-section">
+      <div class="section-heading">
+        <div><h2>EduCore-managed login history</h2><p id="login-page-label" class="muted"></p></div>
+        <form id="login-search" class="search-form">
+          <label class="sr-only" for="login-search-term">Search login history</label>
+          <input id="login-search-term" type="search" maxlength="200" placeholder="Search login identifier or outcome">
+          <button class="button-secondary" type="submit">Search</button>
+        </form>
+      </div>
+      <p class="muted">This view includes logins recorded by EduCore's local Development authentication only. External identity-provider login events are not available here.</p>
+      <div class="table-wrap">
+        <table><thead><tr><th scope="col">UTC time</th><th scope="col">Identifier</th><th scope="col">Result</th><th scope="col">Outcome</th></tr></thead><tbody id="login-table"></tbody></table>
+      </div>
+      <div class="pagination">
+        <button id="login-previous" class="button-secondary" type="button">Previous</button>
+        <span id="login-page"></span>
+        <button id="login-next" class="button-secondary" type="button">Next</button>
+      </div>
+    </section>
+
+    <section id="audit-events" class="panel platform-section">
+      <div class="section-heading">
+        <div><h2>Administrative audit events</h2><p id="audit-page-label" class="muted"></p></div>
+        <form id="audit-search" class="search-form">
+          <label class="sr-only" for="audit-search-term">Search audit events</label>
+          <input id="audit-search-term" type="search" maxlength="200" placeholder="Search actor, action, or target">
+          <button class="button-secondary" type="submit">Search</button>
+        </form>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th scope="col">UTC time</th><th scope="col">Actor</th><th scope="col">Action</th><th scope="col">Target</th><th scope="col">Details</th></tr></thead><tbody id="audit-table"></tbody></table>
+      </div>
+      <div class="pagination">
+        <button id="audit-previous" class="button-secondary" type="button">Previous</button>
+        <span id="audit-page"></span>
+        <button id="audit-next" class="button-secondary" type="button">Next</button>
+      </div>
+    </section>
+  </main>
+  <script src="/platform.js" defer></script>
+</body>
+</html>
